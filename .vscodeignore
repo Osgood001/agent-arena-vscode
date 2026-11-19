@@ -1,0 +1,10 @@
+.vscode/**
+.github/**
+.agent-arena/**
+test/**
+scripts/**
+docs/**
+*.vsix
+.gitignore
+.DS_Store
+node_modules/**

@@ -1,0 +1,246 @@
+{
+  "name": "agent-arena",
+  "displayName": "Agent Arena",
+  "description": "Run multiple AI coding harnesses, models, and reasoning efforts side-by-side in VS Code, and analyze token usage, elapsed time, diffs, and blind outcomes.",
+  "version": "0.3.0",
+  "publisher": "Osgood001",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#121b26",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Testing",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "agent",
+    "benchmark",
+    "claude",
+    "codex",
+    "opencode",
+    "llm",
+    "eval",
+    "side-by-side",
+    "telemetry"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Osgood001/agent-arena-vscode.git"
+  },
+  "homepage": "https://github.com/Osgood001/agent-arena-vscode#readme",
+  "bugs": {
+    "url": "https://github.com/Osgood001/agent-arena-vscode/issues"
+  },
+  "qna": "marketplace",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Agent Arena executes local AI coding CLI harnesses in your workspace."
+    },
+    "virtualWorkspaces": false
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onView:agentArena.sidebar",
+    "onStartupFinished"
+  ],
+  "scripts": {
+    "test": "node test/run_tests.js",
+    "package": "npx --yes @vscode/vsce package"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentArena",
+          "title": "Agent Arena",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "agentArena": [
+        {
+          "type": "webview",
+          "id": "agentArena.sidebar",
+          "name": "Runs & Harnesses",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "agentArena.openArena",
+        "title": "Agent Arena: Open Side-by-Side Arena",
+        "icon": "$(layout-panel)"
+      },
+      {
+        "command": "agentArena.openAnalysis",
+        "title": "Agent Arena: Open Analysis & Telemetry",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "agentArena.startTutorial",
+        "title": "Agent Arena: Start Live Welcome Tutorial",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "agentArena.cancelAll",
+        "title": "Agent Arena: Stop Running Agents",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "agentArena.exportData",
+        "title": "Agent Arena: Export Telemetry CSV/JSON",
+        "icon": "$(export)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "agentArena.openArena",
+          "when": "view == agentArena.sidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "agentArena.openAnalysis",
+          "when": "view == agentArena.sidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "agentArena.startTutorial",
+          "when": "view == agentArena.sidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "agentArena.exportData",
+          "when": "view == agentArena.sidebar",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Agent Arena",
+      "properties": {
+        "agentArena.presets": {
+          "type": "array",
+          "description": "Optional custom harness + model + reasoning effort presets. Leave empty to auto-discover defaults from your installed CLIs.",
+          "default": [],
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "harness": {
+                "type": "string",
+                "enum": [
+                  "codex",
+                  "claude",
+                  "opencode",
+                  "pi",
+                  "dsh",
+                  "custom"
+                ]
+              },
+              "model": {
+                "type": "string"
+              },
+              "effort": {
+                "type": "string"
+              },
+              "extraArgs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "commandTemplate": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "agentArena.defaultIsolationMode": {
+          "type": "string",
+          "enum": [
+            "direct",
+            "scratch",
+            "apfs-cow",
+            "git-worktree"
+          ],
+          "default": "direct",
+          "description": "Default execution mode: direct (shared workspace, instant), scratch (isolated output dir, instant), apfs-cow (CoW clone), or git-worktree."
+        },
+        "agentArena.maxConcurrency": {
+          "type": "number",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 12,
+          "description": "Maximum number of agents to run concurrently per task."
+        },
+        "agentArena.timeoutMinutes": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "description": "Per-agent execution timeout in minutes."
+        },
+        "agentArena.symlinkDirs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "node_modules",
+            ".venv",
+            "venv",
+            ".git",
+            "dist",
+            "build",
+            "target",
+            ".next",
+            ".cache",
+            "data",
+            "archive",
+            "output",
+            ".bundle"
+          ],
+          "description": "Top-level heavy directories symlinked rather than cloned in CoW mode and skipped in fast manifests."
+        },
+        "agentArena.claudePermissionMode": {
+          "type": "string",
+          "enum": [
+            "acceptEdits",
+            "bypassPermissions",
+            "auto"
+          ],
+          "default": "acceptEdits",
+          "description": "Permission mode passed to Claude Code CLI."
+        },
+        "agentArena.codexSandboxMode": {
+          "type": "string",
+          "enum": [
+            "workspace-write",
+            "danger-full-access",
+            "read-only"
+          ],
+          "default": "workspace-write",
+          "description": "Sandbox mode passed to Codex CLI."
+        },
+        "agentArena.opencodeAuto": {
+          "type": "boolean",
+          "default": true,
+          "description": "Pass --auto to OpenCode non-interactive runs."
+        }
+      }
+    }
+  }
+}

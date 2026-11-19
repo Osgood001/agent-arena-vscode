@@ -1,0 +1,5 @@
+node_modules/
+*.vsix
+.agent-arena/
+.DS_Store
+coverage/
