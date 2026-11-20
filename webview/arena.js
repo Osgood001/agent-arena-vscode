@@ -46,6 +46,14 @@ function renderArenaHtml(webview) {
       background: var(--aa-subtle);
     }
     .drawer-wrap.open { display: flex; }
+    .add-mode-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+    }
     .preset-bar {
       display: flex;
       flex-wrap: wrap;
@@ -359,17 +367,19 @@ function renderArenaHtml(webview) {
   </div>
 
   <div id="agentsDrawer" class="drawer-wrap">
+    <div id="addModeHeader" class="add-mode-bar" style="display:none;"></div>
     <div id="presetBar" class="preset-bar"></div>
     <div id="customDrawer" class="custom-drawer">
       <select id="custHarness">
         <option value="codex">codex</option>
         <option value="claude">claude</option>
+        <option value="agy">agy (Antigravity)</option>
         <option value="opencode">opencode</option>
         <option value="pi">pi</option>
         <option value="dsh">dsh</option>
         <option value="custom">custom shell</option>
       </select>
-      <input id="custModel" type="text" placeholder="Model (optional, e.g. sonnet, o3, deepseek-chat)" style="width:225px;" />
+      <input id="custModel" type="text" placeholder="Model (optional, e.g. sonnet, o3, gemini-2.5-pro)" style="width:240px;" />
       <input id="custEffort" type="text" placeholder="Effort (low/medium/high)" style="width:145px;" />
       <input id="custArgs" type="text" placeholder="Extra args" style="width:120px;" />
       <input id="custTpl" type="text" placeholder="Custom cmd template ({prompt_file}, {cwd})" style="width:230px;display:none;" />
@@ -421,6 +431,7 @@ function renderArenaHtml(webview) {
       tutorial: { visible: false, taskId: null, completed: false },
     };
     let draftAgents = [];
+    let pendingAddAgents = [];
     let paneModes = {};     // candId -> 'output' | 'activity' | 'raw' | 'file:<relPath>'
     let paneFilters = {};   // candId -> 'all' | 'tools' | 'errors'
     let paneRawText = {};   // candId -> boolean (true = show unrendered markdown source in Output/File)
@@ -428,10 +439,13 @@ function renderArenaHtml(webview) {
     let fileCache = {};     // taskId::candId::relPath -> { text, error }
     let agentsDrawerOpen = null; // null = auto (open in draft, collapsed in active run)
     let isLaunching = false;
+    let isAddingAgents = false;
+    let scrollColumnsToEndNext = false;
     const TUTORIAL_PROMPT = 'Inspect the current workspace top-level files and summarize in 5 concise bullet points plus a small Markdown table what this project contains and how it is structured. Do not edit any existing files.';
 
     const taskSelect = document.getElementById('taskSelect');
     const agentsDrawer = document.getElementById('agentsDrawer');
+    const addModeHeader = document.getElementById('addModeHeader');
     const btnAgentsDrawer = document.getElementById('btnAgentsDrawer');
     const presetBar = document.getElementById('presetBar');
     const tutorialBanner = document.getElementById('tutorialBanner');
@@ -492,12 +506,16 @@ function renderArenaHtml(webview) {
       const commandTemplate = document.getElementById('custTpl').value.trim();
       const item = { harness, model, effort, extraArgs, commandTemplate };
       item.label = configKeyOf(item);
-      draftAgents.push(item);
       if (state.activeTask) {
-        state.activeTaskId = null;
-        state.activeTask = null;
+        pendingAddAgents.push(item);
+        agentsDrawerOpen = true;
+        renderDrawerVisibility();
+        renderAddModeHeader();
+        renderPresetBar();
+      } else {
+        draftAgents.push(item);
+        renderAll();
       }
-      renderAll();
     });
 
     document.getElementById('btnCloseCustom').addEventListener('click', () => {
@@ -507,6 +525,7 @@ function renderArenaHtml(webview) {
     document.getElementById('btnNewDraft').addEventListener('click', () => {
       state.activeTaskId = null;
       state.activeTask = null;
+      pendingAddAgents = [];
       agentsDrawerOpen = true;
       btnOpenAnalysis.classList.remove('pulse');
       renderAll();
@@ -515,6 +534,7 @@ function renderArenaHtml(webview) {
 
     taskSelect.addEventListener('change', () => {
       const val = taskSelect.value;
+      pendingAddAgents = [];
       if (!val) {
         state.activeTaskId = null;
         state.activeTask = null;
@@ -603,9 +623,61 @@ function renderArenaHtml(webview) {
     function renderDrawerVisibility() {
       const shouldOpen = agentsDrawerOpen !== null ? agentsDrawerOpen : !state.activeTask;
       agentsDrawer.classList.toggle('open', shouldOpen);
-      const count = state.activeTask ? (state.activeTask.candidates || []).length : draftAgents.length;
-      btnAgentsDrawer.textContent = 'Agents (' + count + ')' + (shouldOpen ? ' ▴' : ' ▾');
+      if (state.activeTask) {
+        btnAgentsDrawer.textContent = '+ Add Agent' + (shouldOpen ? ' ▴' : ' ▾');
+        btnAgentsDrawer.title = 'Add & run another agent configuration in this existing run without re-running completed columns';
+      } else {
+        btnAgentsDrawer.textContent = 'Agents (' + draftAgents.length + ')' + (shouldOpen ? ' ▴' : ' ▾');
+        btnAgentsDrawer.title = 'Toggle agent presets & custom columns';
+      }
     }
+
+    function renderAddModeHeader() {
+      if (!state.activeTask) {
+        addModeHeader.style.display = 'none';
+        addModeHeader.innerHTML = '';
+        return;
+      }
+      addModeHeader.style.display = 'flex';
+      const n = pendingAddAgents.length;
+      addModeHeader.innerHTML =
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+          '<strong>Add agent to this run</strong>' +
+          '<span class="muted">Runs the same prompt alongside existing columns</span>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;">' +
+          (n > 0 ? '<button id="btnClearPendingAdd" class="ghost" style="font-size:11.5px;padding:2px 8px;">Clear</button>' : '') +
+          '<button id="btnRunAddedAgents" class="primary" style="font-size:11.5px;padding:3px 10px;"' + (n === 0 || isAddingAgents ? ' disabled' : '') + '>▶ Run Added (' + n + ')</button>' +
+        '</div>';
+    }
+
+    addModeHeader.addEventListener('click', (e) => {
+      if (e.target.closest('#btnClearPendingAdd')) {
+        pendingAddAgents = [];
+        renderAddModeHeader();
+        renderPresetBar();
+        return;
+      }
+      if (e.target.closest('#btnRunAddedAgents')) {
+        if (isAddingAgents || !state.activeTask || !pendingAddAgents.length) return;
+        const configs = pendingAddAgents.map((c) => ({ ...c }));
+        const targetTaskId = state.activeTask.id;
+        isAddingAgents = true;
+        setTimeout(() => {
+          isAddingAgents = false;
+          renderAddModeHeader();
+        }, 1800);
+        pendingAddAgents = [];
+        agentsDrawerOpen = false;
+        scrollColumnsToEndNext = true;
+        btnOpenAnalysis.classList.remove('pulse');
+        composerStatus.textContent = 'Adding ' + configs.length + ' agent(s) to ' + state.activeTask.title + '…';
+        renderDrawerVisibility();
+        renderAddModeHeader();
+        renderPresetBar();
+        vscode.postMessage({ type: 'addCandidatesToTask', taskId: targetTaskId, configs });
+      }
+    });
 
     function renderTopControls() {
       const opts = ['<option value="">+ Compose New Run</option>'];
@@ -621,6 +693,8 @@ function renderArenaHtml(webview) {
           (state.settingsSummary.claudePermissionMode || 'acceptEdits') +
           ' | Codex: ' +
           (state.settingsSummary.codexSandboxMode || 'workspace-write') +
+          ' | Agy: ' +
+          (state.settingsSummary.agyPermissionMode || 'default') +
           ')';
       }
 
@@ -645,17 +719,31 @@ function renderArenaHtml(webview) {
     }
 
     function renderPresetBar() {
-      const activeList = state.activeTask ? [] : draftAgents;
+      const inAddMode = Boolean(state.activeTask);
+      const activeList = inAddMode ? pendingAddAgents : draftAgents;
       const selectedKeys = new Set(activeList.map((c) => configKeyOf(c)));
+      const existingKeys = new Set(
+        inAddMode ? (state.activeTask.candidates || []).map((c) => configKeyOf(c)) : [],
+      );
+      const presetKeys = new Set((state.presets || []).map((p) => configKeyOf(p)));
       const chips = (state.presets || []).map((p, idx) => {
         const key = configKeyOf(p);
         const info = (state.harnesses || {})[p.harness];
         const avail = info ? info.available : true;
-        const sel = !state.activeTask && selectedKeys.has(key);
-        return '<button class="preset-chip' + (sel ? ' selected' : '') + (avail ? '' : ' unavailable') + '" data-preset-idx="' + idx + '" title="' + esc(avail ? 'Toggle ' + key : 'Binary not detected in PATH') + '">' +
+        const sel = selectedKeys.has(key);
+        const alreadyInTask = inAddMode && existingKeys.has(key);
+        return '<button class="preset-chip' + (sel ? ' selected' : '') + (avail ? '' : ' unavailable') + '" data-preset-idx="' + idx + '" title="' + esc(avail ? ('Toggle ' + key + (alreadyInTask ? ' (already in run)' : '')) : 'Binary not detected in PATH') + '">' +
           '<span class="dot ' + (avail ? 'ok' : 'no') + '"></span>' +
           esc(p.label || key) +
+          (alreadyInTask ? ' <span class="muted">✓</span>' : '') +
           '</button>';
+      });
+      activeList.forEach((c, aIdx) => {
+        const key = configKeyOf(c);
+        if (!presetKeys.has(key)) {
+          chips.push('<button class="preset-chip selected" data-extra-idx="' + aIdx + '" title="Remove custom agent">' +
+            esc(c.label || key) + ' ×</button>');
+        }
       });
       chips.push('<button class="preset-chip" id="btnToggleCustom">+ Custom</button>');
       presetBar.innerHTML = chips.join('');
@@ -666,21 +754,40 @@ function renderArenaHtml(webview) {
         document.getElementById('customDrawer').classList.toggle('open');
         return;
       }
+      const extraBtn = e.target.closest('button[data-extra-idx]');
+      if (extraBtn) {
+        const eIdx = Number(extraBtn.getAttribute('data-extra-idx'));
+        if (state.activeTask) {
+          pendingAddAgents.splice(eIdx, 1);
+          renderAddModeHeader();
+          renderPresetBar();
+        } else {
+          draftAgents.splice(eIdx, 1);
+          renderAll();
+        }
+        return;
+      }
       const btn = e.target.closest('button[data-preset-idx]');
       if (!btn) return;
       const idx = Number(btn.getAttribute('data-preset-idx'));
       const preset = (state.presets || [])[idx];
       if (!preset) return;
-      if (state.activeTask) {
-        state.activeTaskId = null;
-        state.activeTask = null;
-      }
       const key = configKeyOf(preset);
-      const found = draftAgents.findIndex((c) => configKeyOf(c) === key);
-      if (found >= 0) draftAgents.splice(found, 1);
-      else draftAgents.push({ ...preset, label: preset.label || key });
-      agentsDrawerOpen = true;
-      renderAll();
+      if (state.activeTask) {
+        const found = pendingAddAgents.findIndex((c) => configKeyOf(c) === key);
+        if (found >= 0) pendingAddAgents.splice(found, 1);
+        else pendingAddAgents.push({ ...preset, label: preset.label || key });
+        agentsDrawerOpen = true;
+        renderDrawerVisibility();
+        renderAddModeHeader();
+        renderPresetBar();
+      } else {
+        const found = draftAgents.findIndex((c) => configKeyOf(c) === key);
+        if (found >= 0) draftAgents.splice(found, 1);
+        else draftAgents.push({ ...preset, label: preset.label || key });
+        agentsDrawerOpen = true;
+        renderAll();
+      }
     });
 
     function filterFeedItems(feed, filter) {
@@ -888,7 +995,13 @@ function renderArenaHtml(webview) {
     function patchCandidateInPlace(cand) {
       if (!state.activeTask || state.activeTask.id !== cand.taskId) return;
       const idx = (state.activeTask.candidates || []).findIndex((x) => x.id === cand.id);
-      if (idx >= 0) state.activeTask.candidates[idx] = cand;
+      if (idx >= 0) {
+        state.activeTask.candidates[idx] = cand;
+      } else {
+        state.activeTask.candidates.push(cand);
+        renderColumns();
+        return;
+      }
       const pane = columnsWrap.querySelector('.pane[data-cand-id="' + CSS.escape(cand.id) + '"]');
       if (!pane) {
         renderColumns();
@@ -1093,6 +1206,7 @@ function renderArenaHtml(webview) {
 
     function renderAll() {
       renderTopControls();
+      renderAddModeHeader();
       renderPresetBar();
       renderTutorialBanner();
       renderColumns();
@@ -1104,6 +1218,9 @@ function renderArenaHtml(webview) {
       if (msg.type === 'state') {
         const prevMode = isolationSelect.value;
         state = msg.payload || state;
+        if (state.openAddDrawer) {
+          agentsDrawerOpen = true;
+        }
         if (!draftAgents.length && (state.presets || []).length) {
           const avail = state.presets.filter((p) => {
             const info = (state.harnesses || {})[p.harness];
@@ -1123,6 +1240,10 @@ function renderArenaHtml(webview) {
           isolationSelect.value = state.defaultIsolationMode || 'direct';
         }
         renderAll();
+        if (scrollColumnsToEndNext) {
+          scrollColumnsToEndNext = false;
+          columnsWrap.scrollLeft = columnsWrap.scrollWidth;
+        }
         if (state.activeTask) {
           const anyRunning = (state.activeTask.candidates || []).some((c) => c.status === 'running' || c.status === 'pending');
           composerStatus.textContent = anyRunning ? 'Running concurrently…' : 'Complete.';

@@ -612,18 +612,31 @@ function renderAnalysisHtml(webview) {
       // 4. Judge Controls + AI Agent Judge Bar
       const jCfg = currentJudgeConfig();
       const isJudgingThis = state.judgingTaskId === task.id;
-      const harnessOptions = ['codex', 'claude', 'opencode', 'pi', 'dsh', 'custom'].map((h) => {
+      const harnessOptions = ['codex', 'claude', 'agy', 'opencode', 'pi', 'dsh', 'custom'].map((h) => {
         const info = (state.harnesses || {})[h];
         const tag = h === 'custom' ? '' : (info && info.available ? '' : ' (not found)');
         return '<option value="' + h + '"' + (jCfg.harness === h ? ' selected' : '') + '>' + h + tag + '</option>';
       }).join('');
 
       let judgeProvenance = '';
+      let staleJudgeNotice = '';
       if (task.judgment) {
         if (j.judgeType === 'agent' && j.judgeConfig) {
           judgeProvenance = '<span class="badge ai">⚡ AI Judge · ' + esc(j.judgeConfig.label || j.judgeConfig.harness) + (j.blindedWhenJudged ? ' · Blind' : '') + '</span>';
         } else {
           judgeProvenance = '<span class="badge">Human Judge' + (j.blindedWhenJudged ? ' · Blind' : '') + '</span>';
+        }
+        const judgedIds = Array.isArray(j.judgedCandidateIds) && j.judgedCandidateIds.length
+          ? new Set(j.judgedCandidateIds)
+          : null;
+        const jMs = task.judgment.judgedAt ? Date.parse(task.judgment.judgedAt) : NaN;
+        const hasUnjudgedNew = cands.some((c) => {
+          if (judgedIds) return !judgedIds.has(c.id);
+          const cMs = c.createdAt ? Date.parse(c.createdAt) : NaN;
+          return Number.isFinite(jMs) && Number.isFinite(cMs) && cMs > jMs + 1000;
+        });
+        if (hasUnjudgedNew) {
+          staleJudgeNotice = '<div class="notice-banner" style="margin-bottom:8px;padding:6px 10px;font-size:12px;"><span>New agent(s) were added after this judgment — re-run AI Judge or save an updated verdict to include them on the leaderboard.</span></div>';
         }
       }
 
@@ -652,6 +665,7 @@ function renderAnalysisHtml(webview) {
           '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">' +
             '<strong style="font-size:15px;">' + esc(task.title) + '</strong>' +
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+              '<button id="btnAddAgentToRun" class="ghost" style="font-size:11.5px;padding:2px 8px;" title="Add and run another agent configuration on this run">+ Add Agent</button>' +
               '<button id="btnCopyPrompt" class="ghost" style="font-size:11.5px;padding:2px 8px;">Copy Prompt</button>' +
             '</div>' +
           '</div>' +
@@ -694,6 +708,7 @@ function renderAnalysisHtml(webview) {
             '</div>' +
           '</div>' +
           (judgeErr ? '<div class="muted" style="color:var(--aa-err-fg);font-size:12px;margin-bottom:8px;">' + esc(judgeErr) + '</div>' : '') +
+          staleJudgeNotice +
           '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-size:11.5px;" class="muted">Custom Judge Rubric (optional)</summary>' +
             '<textarea id="judgeRubric" placeholder="Optional criteria for the AI judge (e.g. prioritize correctness of diffs over verbosity)…" style="width:100%;min-height:46px;margin-top:6px;">' + esc(jCfg.rubric || '') + '</textarea>' +
           '</details>' +
@@ -969,9 +984,13 @@ function renderAnalysisHtml(webview) {
     });
 
     viewRun.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-action], button#btnSaveJudgment, button#btnAdoptWinner, button#btnCopyPrompt, button#btnRunAiJudge, button#btnCancelAiJudge, button#btnSaveJudgeCfg');
+      const btn = e.target.closest('button[data-action], button#btnSaveJudgment, button#btnAdoptWinner, button#btnCopyPrompt, button#btnAddAgentToRun, button#btnRunAiJudge, button#btnCancelAiJudge, button#btnSaveJudgeCfg');
       if (!btn) return;
       const taskId = state.selectedTaskId;
+      if (btn.id === 'btnAddAgentToRun') {
+        vscode.postMessage({ type: 'openArenaToAddAgent', taskId });
+        return;
+      }
       if (btn.id === 'btnCopyPrompt') {
         const task = (state.tasks || []).find((t) => t.id === taskId);
         if (task && navigator.clipboard) {

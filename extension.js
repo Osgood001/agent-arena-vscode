@@ -34,6 +34,7 @@ function getConfig() {
     claudePermissionMode: cfg.get('claudePermissionMode') || 'acceptEdits',
     codexSandboxMode: cfg.get('codexSandboxMode') || 'workspace-write',
     opencodeAuto: cfg.get('opencodeAuto') !== false,
+    agyPermissionMode: cfg.get('agyPermissionMode') || 'default',
     judge: {
       harness: cfg.get('judge.harness') || '',
       model: cfg.get('judge.model') || '',
@@ -57,7 +58,9 @@ function activate(context) {
   let activeJudges = new Map();  // taskId -> { cancel, label }
   let deletedTasks = new Set();
   let recentLaunchHashes = new Map();
+  let recentAddKeys = new Map();
   let launchInFlight = false;
+  let pendingOpenAddDrawer = false;
   let statusTicker = null;
 
   // Clean up any orphaned running/pending tasks left over from a previous VS Code session
@@ -141,7 +144,7 @@ function activate(context) {
     });
   }
 
-  function pushArenaState(taskId = activeArenaTaskId) {
+  function pushArenaState(taskId = activeArenaTaskId, extra = {}) {
     if (!arenaPanel) return;
     const root = getWorkspaceRoot();
     const cfg = getConfig();
@@ -159,9 +162,11 @@ function activate(context) {
         activeTaskId: activeTask ? activeTask.id : null,
         activeTask,
         defaultIsolationMode: cfg.defaultIsolationMode,
+        openAddDrawer: Boolean(extra && extra.openAddDrawer),
         settingsSummary: {
           claudePermissionMode: cfg.claudePermissionMode,
           codexSandboxMode: cfg.codexSandboxMode,
+          agyPermissionMode: cfg.agyPermissionMode,
         },
         tutorial: getTutorialState(),
       },
@@ -340,6 +345,134 @@ function activate(context) {
     return count;
   }
 
+  async function runCandidatesForTask(root, taskId, candIds) {
+    const cfg = getConfig();
+    const initialTask = store.loadTask(root, taskId);
+    if (!initialTask) return;
+    const idSet = Array.isArray(candIds) ? new Set(candIds) : null;
+    const queue = (initialTask.candidates || []).filter((c) => !idSet || idSet.has(c.id));
+    if (!queue.length) return;
+    const maxConc = Math.max(1, cfg.maxConcurrency || 6);
+
+    async function runOne(candRef) {
+      const liveTask = store.loadTask(root, taskId);
+      if (!liveTask || deletedTasks.has(taskId)) return;
+      const cand = liveTask.candidates.find((c) => c.id === candRef.id);
+      if (!cand) return;
+      cand.status = 'running';
+      cand.startedAt = new Date().toISOString();
+      store.saveTask(root, liveTask);
+
+      if (arenaPanel) {
+        arenaPanel.webview.postMessage({
+          type: 'candidateProgress',
+          payload: { ...cand, taskId },
+        });
+      }
+      updateStatusBar();
+      pushSidebarState();
+
+      const key = `${taskId}::${cand.id}`;
+      const handle = harnesses.spawnCandidate(
+        cand,
+        liveTask,
+        {
+          workspaceRoot: root,
+          timeoutMinutes: cfg.timeoutMinutes,
+          claudePermissionMode: cfg.claudePermissionMode,
+          codexSandboxMode: cfg.codexSandboxMode,
+          opencodeAuto: cfg.opencodeAuto,
+          agyPermissionMode: cfg.agyPermissionMode,
+        },
+        {
+          onProgress: (prog) => {
+            if (!arenaPanel) return;
+            arenaPanel.webview.postMessage({
+              type: 'candidateProgress',
+              payload: {
+                ...cand,
+                taskId,
+                status: 'running',
+                durationMs: prog.durationMs,
+                telemetry: prog.telemetry,
+                feedPreview: prog.feed,
+                finalText: prog.finalText,
+              },
+            });
+          },
+        },
+      );
+
+      activeRunners.set(key, { cancel: handle.cancel, taskId, candId: cand.id });
+      const res = await handle.promise;
+      activeRunners.delete(key);
+
+      if (deletedTasks.has(taskId)) return;
+      const postTask = store.loadTask(root, taskId);
+      if (!postTask) return;
+      const targetCand = postTask.candidates.find((c) => c.id === cand.id);
+      if (!targetCand) return;
+
+      targetCand.status = res.status;
+      targetCand.exitCode = res.exitCode;
+      targetCand.finishedAt = new Date().toISOString();
+      targetCand.durationMs = res.durationMs;
+      targetCand.telemetry = res.telemetry;
+      targetCand.feedPreview = res.feed;
+      targetCand.finalText = res.finalText;
+      targetCand.error = res.error;
+
+      if (postTask.isolationMode === 'direct') {
+        const baselineManifest = targetCand.directBeforeManifest || postTask.directBeforeManifest;
+        targetCand.changedFiles = isolator.computeDirectChanges(baselineManifest, root, {
+          symlinkDirs: cfg.symlinkDirs,
+        });
+      } else if (postTask.isolationMode === 'scratch') {
+        targetCand.changedFiles = isolator.computeWorkspaceDiff(null, targetCand.workDir, {
+          symlinkDirs: cfg.symlinkDirs,
+        });
+      } else {
+        targetCand.changedFiles = isolator.computeWorkspaceDiff(postTask.baselineDir, targetCand.workDir, {
+          symlinkDirs: cfg.symlinkDirs,
+        });
+      }
+
+      const hasRemainingActive =
+        postTask.candidates.some((c) => c.status === 'running' || c.status === 'pending') ||
+        Array.from(activeRunners.values()).some((r) => r.taskId === postTask.id);
+      if (!hasRemainingActive) {
+        postTask.finishedAt = new Date().toISOString();
+      }
+      store.saveTask(root, postTask);
+
+      if (arenaPanel) {
+        arenaPanel.webview.postMessage({
+          type: 'candidateProgress',
+          payload: { ...targetCand, taskId: postTask.id },
+        });
+      }
+      updateStatusBar();
+      pushSidebarState();
+      pushAnalysisState(postTask.id);
+
+      if (!hasRemainingActive) {
+        const okCount = postTask.candidates.filter((c) => c.status === 'done').length;
+        const msg = `Agent Arena: ${okCount}/${postTask.candidates.length} agents finished — ${postTask.title}`;
+        const picked = await vscode.window.showInformationMessage(msg, 'Open Analysis', 'Show Arena');
+        if (picked === 'Open Analysis') openAnalysisPanel(postTask.id);
+        else if (picked === 'Show Arena') openArenaPanel(postTask.id);
+      }
+    }
+
+    const workers = Array.from({ length: Math.min(maxConc, queue.length) }, async () => {
+      while (queue.length > 0) {
+        const nextCand = queue.shift();
+        if (nextCand) await runOne(nextCand);
+      }
+    });
+    await Promise.all(workers);
+  }
+
   async function launchTask(payload) {
     if (!payload || !String(payload.prompt || '').trim() || !Array.isArray(payload.configs) || !payload.configs.length) {
       return;
@@ -386,128 +519,72 @@ function activate(context) {
     launchInFlight = false;
     refreshAllViews();
 
-    const maxConc = Math.max(1, cfg.maxConcurrency || 6);
-    const queue = [...task.candidates];
-    let settledCount = 0;
-
-    async function runOne(candRef) {
-      const liveTask = store.loadTask(root, task.id);
-      const cand = liveTask.candidates.find((c) => c.id === candRef.id);
-      cand.status = 'running';
-      cand.startedAt = new Date().toISOString();
-      store.saveTask(root, liveTask);
-
-      if (arenaPanel) {
-        arenaPanel.webview.postMessage({
-          type: 'candidateProgress',
-          payload: { ...cand, taskId: task.id },
-        });
-      }
-      updateStatusBar();
-      pushSidebarState();
-
-      const key = `${task.id}::${cand.id}`;
-      const handle = harnesses.spawnCandidate(
-        cand,
-        liveTask,
-        {
-          workspaceRoot: root,
-          timeoutMinutes: cfg.timeoutMinutes,
-          claudePermissionMode: cfg.claudePermissionMode,
-          codexSandboxMode: cfg.codexSandboxMode,
-          opencodeAuto: cfg.opencodeAuto,
-        },
-        {
-          onProgress: (prog) => {
-            if (!arenaPanel) return;
-            arenaPanel.webview.postMessage({
-              type: 'candidateProgress',
-              payload: {
-                ...cand,
-                taskId: task.id,
-                status: 'running',
-                durationMs: prog.durationMs,
-                telemetry: prog.telemetry,
-                feedPreview: prog.feed,
-                finalText: prog.finalText,
-              },
-            });
-          },
-        },
-      );
-
-      activeRunners.set(key, { cancel: handle.cancel, taskId: task.id, candId: cand.id });
-      const res = await handle.promise;
-      activeRunners.delete(key);
-
-      if (deletedTasks.has(task.id)) return;
-      const postTask = store.loadTask(root, task.id);
-      if (!postTask) return;
-      const targetCand = postTask.candidates.find((c) => c.id === cand.id);
-      if (!targetCand) return;
-
-      targetCand.status = res.status;
-      targetCand.exitCode = res.exitCode;
-      targetCand.finishedAt = new Date().toISOString();
-      targetCand.durationMs = res.durationMs;
-      targetCand.telemetry = res.telemetry;
-      targetCand.feedPreview = res.feed;
-      targetCand.finalText = res.finalText;
-      targetCand.error = res.error;
-
-      if (postTask.isolationMode === 'direct') {
-        targetCand.changedFiles = isolator.computeDirectChanges(postTask.directBeforeManifest, root, {
-          symlinkDirs: cfg.symlinkDirs,
-        });
-      } else if (postTask.isolationMode === 'scratch') {
-        targetCand.changedFiles = isolator.computeWorkspaceDiff(null, targetCand.workDir, {
-          symlinkDirs: cfg.symlinkDirs,
-        });
-      } else {
-        targetCand.changedFiles = isolator.computeWorkspaceDiff(postTask.baselineDir, targetCand.workDir, {
-          symlinkDirs: cfg.symlinkDirs,
-        });
-      }
-
-      settledCount += 1;
-      if (settledCount === postTask.candidates.length) {
-        postTask.finishedAt = new Date().toISOString();
-      }
-      store.saveTask(root, postTask);
-
-      if (arenaPanel) {
-        arenaPanel.webview.postMessage({
-          type: 'candidateProgress',
-          payload: { ...targetCand, taskId: postTask.id },
-        });
-      }
-      updateStatusBar();
-      pushSidebarState();
-      pushAnalysisState(postTask.id);
-
-      if (settledCount === postTask.candidates.length) {
-        const okCount = postTask.candidates.filter((c) => c.status === 'done').length;
-        const msg = `Agent Arena: ${okCount}/${postTask.candidates.length} agents finished — ${postTask.title}`;
-        const picked = await vscode.window.showInformationMessage(msg, 'Open Analysis', 'Show Arena');
-        if (picked === 'Open Analysis') openAnalysisPanel(postTask.id);
-        else if (picked === 'Show Arena') openArenaPanel(postTask.id);
-      }
-    }
-
-    const workers = Array.from({ length: Math.min(maxConc, queue.length) }, async () => {
-      while (queue.length > 0) {
-        const nextCand = queue.shift();
-        if (nextCand) await runOne(nextCand);
-      }
-    });
-    await Promise.all(workers);
+    await runCandidatesForTask(root, task.id, task.candidates.map((c) => c.id));
   }
 
-  function openArenaPanel(taskId = undefined) {
+  async function addCandidatesToTask(taskId, configs) {
+    if (!taskId || deletedTasks.has(taskId) || !Array.isArray(configs) || !configs.length) {
+      return;
+    }
+    const addHash = crypto.createHash('sha256').update(`${taskId}::${JSON.stringify(configs)}`, 'utf8').digest('hex');
+    const lastAddTs = recentAddKeys.get(addHash) || 0;
+    if (Date.now() - lastAddTs < 1500) {
+      return;
+    }
+    recentAddKeys.set(addHash, Date.now());
+
+    const root = getWorkspaceRoot();
+    const cfg = getConfig();
+    const prevTask = store.loadTask(root, taskId);
+    if (!prevTask) return;
+
+    let appended;
+    try {
+      appended = store.appendCandidates(root, taskId, configs);
+    } catch (err) {
+      vscode.window.showErrorMessage(`Agent Arena add-agent failed: ${err.message}`);
+      if (arenaPanel) {
+        arenaPanel.webview.postMessage({ type: 'errorToast', payload: err.message });
+      }
+      return;
+    }
+
+    const { task, addedCandidates } = appended;
+    try {
+      await isolator.prepareCandidatesEnvironment(root, task, addedCandidates, { symlinkDirs: cfg.symlinkDirs });
+    } catch (err) {
+      for (const c of addedCandidates) {
+        try {
+          const cDir = path.dirname(c.stdoutPath);
+          if (fs.existsSync(cDir)) fs.rmSync(cDir, { recursive: true, force: true });
+        } catch (_) {
+          // ignore cleanup failure
+        }
+      }
+      store.saveTask(root, prevTask);
+      vscode.window.showErrorMessage(`Agent Arena add-agent setup failed: ${err.message}`);
+      if (arenaPanel) {
+        arenaPanel.webview.postMessage({ type: 'errorToast', payload: err.message });
+      }
+      return;
+    }
+
+    store.saveTask(root, task);
+    activeArenaTaskId = task.id;
+    activeAnalysisTaskId = task.id;
+    refreshAllViews();
+
+    await runCandidatesForTask(root, task.id, addedCandidates.map((c) => c.id));
+  }
+
+  function openArenaPanel(taskId = undefined, opts = {}) {
     if (taskId !== undefined) activeArenaTaskId = taskId;
+    pendingOpenAddDrawer = Boolean(opts && opts.openAddDrawer);
     if (arenaPanel) {
       arenaPanel.reveal(vscode.ViewColumn.One);
-      pushArenaState(activeArenaTaskId);
+      const openAddDrawer = pendingOpenAddDrawer;
+      pendingOpenAddDrawer = false;
+      pushArenaState(activeArenaTaskId, { openAddDrawer });
       return;
     }
     arenaPanel = vscode.window.createWebviewPanel(
@@ -523,11 +600,15 @@ function activate(context) {
     arenaPanel.webview.onDidReceiveMessage(async (msg) => {
       if (!msg) return;
       if (msg.type === 'ready') {
-        pushArenaState(activeArenaTaskId);
+        const openAddDrawer = pendingOpenAddDrawer;
+        pendingOpenAddDrawer = false;
+        pushArenaState(activeArenaTaskId, { openAddDrawer });
       } else if (msg.type === 'selectTask') {
         pushArenaState(msg.taskId || null);
       } else if (msg.type === 'launchTask') {
         await launchTask(msg.payload);
+      } else if (msg.type === 'addCandidatesToTask') {
+        await addCandidatesToTask(msg.taskId, msg.configs);
       } else if (msg.type === 'cancelTask') {
         cancelTask(msg.taskId);
       } else if (msg.type === 'cancelCandidate') {
@@ -610,6 +691,8 @@ function activate(context) {
         pushAnalysisState(activeAnalysisTaskId, msg.type === 'ready' ? tab : null);
       } else if (msg.type === 'openArena') {
         openArenaPanel(msg.taskId);
+      } else if (msg.type === 'openArenaToAddAgent') {
+        openArenaPanel(msg.taskId, { openAddDrawer: true });
       } else if (msg.type === 'export') {
         await exportAllData(msg.format);
       } else if (msg.type === 'filterLeaderboard') {
@@ -673,6 +756,7 @@ function activate(context) {
           detectedHarnesses: detected,
           claudePermissionMode: cfg.claudePermissionMode,
           opencodeAuto: cfg.opencodeAuto,
+          agyPermissionMode: cfg.agyPermissionMode,
           timeoutMinutes: Math.min(cfg.timeoutMinutes || 30, 10),
         });
         activeJudges.set(task.id, { cancel: handle.cancel, label: handle.judgeConfig.label });

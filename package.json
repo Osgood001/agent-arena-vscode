@@ -2,7 +2,7 @@
   "name": "agent-arena",
   "displayName": "Agent Arena",
   "description": "Run multiple AI coding harnesses, models, and reasoning efforts side-by-side in VS Code, and analyze token usage, elapsed time, diffs, and blind outcomes.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "Osgood001",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -25,6 +25,8 @@
     "benchmark",
     "claude",
     "codex",
+    "antigravity",
+    "agy",
     "opencode",
     "llm",
     "eval",
@@ -145,6 +147,7 @@
                 "enum": [
                   "codex",
                   "claude",
+                  "agy",
                   "opencode",
                   "pi",
                   "dsh",
@@ -240,12 +243,24 @@
           "default": true,
           "description": "Pass --auto to OpenCode non-interactive runs."
         },
+        "agentArena.agyPermissionMode": {
+          "type": "string",
+          "enum": [
+            "default",
+            "accept-edits",
+            "auto",
+            "dangerously-skip-permissions"
+          ],
+          "default": "default",
+          "description": "Permission mode passed to Antigravity (agy) headless runs. default leaves ~/.gemini/antigravity-cli/settings.json rules in effect."
+        },
         "agentArena.judge.harness": {
           "type": "string",
           "enum": [
             "",
             "codex",
             "claude",
+            "agy",
             "opencode",
             "pi",
             "dsh",

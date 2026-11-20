@@ -105,6 +105,7 @@ function buildRedactions() {
   const replacementByHarness = {
     codex: 'o3-mini',
     claude: 'claude-sonnet',
+    agy: 'gemini-pro',
     opencode: 'deepseek-chat',
     pi: 'deepseek-chat',
   };

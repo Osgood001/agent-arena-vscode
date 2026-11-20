@@ -76,6 +76,32 @@ async function main() {
     );
     assert(cu.promptFile && cu.command);
 
+    const agyAcc = harnesses.buildCommand(
+      { ...base, harness: 'agy' },
+      task,
+      { agyPermissionMode: 'accept-edits', workspaceRoot: '/tmp/root-ws' },
+    );
+    assert.strictEqual(agyAcc.args[agyAcc.args.indexOf('--add-dir') + 1], '/tmp/root-ws');
+    assert.strictEqual(agyAcc.args[agyAcc.args.indexOf('--output-format') + 1], 'stream-json');
+    assert.strictEqual(agyAcc.args[agyAcc.args.indexOf('--mode') + 1], 'accept-edits');
+    assert.strictEqual(agyAcc.args[agyAcc.args.indexOf('--model') + 1], 'm1');
+    assert.strictEqual(agyAcc.args[agyAcc.args.indexOf('--effort') + 1], 'high');
+    assert.strictEqual(agyAcc.args[agyAcc.args.length - 1], '-p=Summarize README.md');
+
+    const agySkip = harnesses.buildCommand(
+      { ...base, harness: 'agy' },
+      { prompt: '- leading dash' },
+      { agyPermissionMode: 'dangerously-skip-permissions' },
+    );
+    assert(agySkip.args.includes('--dangerously-skip-permissions'));
+    assert(!agySkip.args.includes('--mode'));
+    assert.strictEqual(agySkip.args[agySkip.args.length - 1], '-p=- leading dash');
+
+    const agyDef = harnesses.buildCommand({ ...base, harness: 'agy' }, task, { agyPermissionMode: 'default' });
+    assert(!agyDef.args.includes('--mode'));
+    assert(!agyDef.args.includes('--dangerously-skip-permissions'));
+    assert(harnesses.buildChildEnv().PATH.includes(path.join('.gemini', 'bin')));
+
     const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'arena-home-'));
     try {
       fs.mkdirSync(path.join(fakeHome, '.codex'), { recursive: true });
@@ -88,6 +114,12 @@ async function main() {
       fs.writeFileSync(
         path.join(fakeHome, '.claude', 'settings.json'),
         JSON.stringify({ env: { ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4', SECRET_TOKEN: 'ignore' } }),
+        'utf8',
+      );
+      fs.mkdirSync(path.join(fakeHome, '.gemini', 'antigravity-cli'), { recursive: true });
+      fs.writeFileSync(
+        path.join(fakeHome, '.gemini', 'antigravity-cli', 'settings.json'),
+        JSON.stringify({ model: 'gemini-pro-test', effort: 'high' }),
         'utf8',
       );
       fs.mkdirSync(path.join(fakeHome, '.config', 'opencode'), { recursive: true });
@@ -107,6 +139,8 @@ async function main() {
       assert.strictEqual(defs.codex.model, 'o3-mini');
       assert.strictEqual(defs.codex.effort, 'medium');
       assert.strictEqual(defs.claude.model, 'claude-sonnet-4');
+      assert.strictEqual(defs.agy.model, 'gemini-pro-test');
+      assert.strictEqual(defs.agy.effort, 'high');
       assert.strictEqual(defs.opencode.model, 'deepseek/deepseek-chat');
       assert.strictEqual(defs.pi.model, 'anthropic/claude-haiku');
       assert.strictEqual(defs.pi.effort, 'low');
@@ -114,12 +148,14 @@ async function main() {
       const detected = {
         codex: { available: true },
         claude: { available: true },
+        agy: { available: true },
         opencode: { available: true },
         pi: { available: false },
         dsh: { available: true },
       };
       const effPresets = harnesses.getEffectivePresets([], detected, fakeHome);
       assert(effPresets.some((p) => p.harness === 'codex' && p.model === 'o3-mini'));
+      assert(effPresets.some((p) => p.harness === 'agy' && p.model === 'gemini-pro-test'));
       assert.strictEqual(effPresets[effPresets.length - 1].harness, 'pi'); // unavailable sorted last
 
       const customOverride = [{ label: 'Only Mine', harness: 'codex', model: 'm-custom', effort: 'high' }];
@@ -129,6 +165,12 @@ async function main() {
       assert.strictEqual(tut.length, 3);
       assert.deepStrictEqual(tut.map((x) => x.harness), ['codex', 'claude', 'opencode']);
       assert.strictEqual(tut[0].model, 'o3-mini');
+
+      const tutWithAgy = harnesses.pickTutorialConfigs(
+        { codex: { available: false }, claude: { available: true }, agy: { available: true }, opencode: { available: false }, pi: { available: false }, dsh: { available: false } },
+        fakeHome,
+      );
+      assert.deepStrictEqual(tutWithAgy.map((x) => x.harness), ['claude', 'agy']);
     } finally {
       fs.rmSync(fakeHome, { recursive: true, force: true });
     }
@@ -260,6 +302,53 @@ async function main() {
     assert.strictEqual(rDsh.finalText, 'Line 1\nLine 2');
     assert.strictEqual(rDsh.feed.filter((f) => f.kind === 'stderr').length, 1);
     assert.strictEqual(rDsh.feed.find((f) => f.kind === 'stderr').text, 'Real stderr line');
+
+    // Antigravity (agy) NDJSON stream-json: streaming deltas, tool steps, cache+thinking tokens, denied_actions
+    const pAgy = harnesses.createStreamParser('agy');
+    pAgy.pushStdoutChunk(
+      JSON.stringify({ event: 'init', conversation_id: 'c1', init: { cwd: '/tmp' } }) + '\n' +
+      JSON.stringify({ event: 'step_update', step_update: { step_index: 1, state: 'ACTIVE', step_type: 'tool', tool_name: 'list_dir', tool_info: { name: 'list_dir', parameters: { path: '.' } } } }) + '\n' +
+      JSON.stringify({ event: 'step_update', step_update: { step_index: 1, state: 'DONE', step_type: 'tool', tool_name: 'list_dir', tool_info: { output: 'ok' } } }) + '\n' +
+      JSON.stringify({ event: 'step_update', step_update: { step_index: 2, state: 'ACTIVE', step_type: 'agent_response', text_delta: 'Hello ' } }) + '\n' +
+      JSON.stringify({ event: 'step_update', step_update: { step_index: 2, state: 'ACTIVE', step_type: 'agent_response', text_delta: 'Antigravity' } }) + '\n',
+    );
+    const midAgy = pAgy.snapshot();
+    assert.strictEqual(midAgy.finalText, 'Hello Antigravity');
+    assert.strictEqual(midAgy.telemetry.toolCalls, 1);
+    assert.strictEqual(midAgy.feed.filter((f) => f.kind === 'assistant').length, 1);
+
+    pAgy.pushStdoutChunk(
+      JSON.stringify({
+        event: 'step_update',
+        step_update: {
+          step_index: 2,
+          state: 'DONE',
+          step_type: 'agent_response',
+          text_delta: '!',
+          usage: { input_tokens: 100, output_tokens: 20, thinking_tokens: 15, cache_read_tokens: 400 },
+        },
+      }) + '\n' +
+      JSON.stringify({
+        event: 'result',
+        result: {
+          status: 'SUCCESS',
+          response: 'Hello Antigravity!\n',
+          num_turns: 2,
+          usage: { input_tokens: 150, output_tokens: 35, thinking_tokens: 25, cache_read_tokens: 500 },
+          denied_actions: [{ action: 'command', display_name: 'Bash' }],
+        },
+      }) + '\n',
+    );
+    const rAgy = pAgy.finalize();
+    assert.strictEqual(rAgy.finalText, 'Hello Antigravity!');
+    assert.strictEqual(rAgy.telemetry.toolCalls, 1);
+    assert.strictEqual(rAgy.telemetry.numTurns, 2);
+    assert.strictEqual(rAgy.telemetry.inputTokens, 650);
+    assert.strictEqual(rAgy.telemetry.cachedTokens, 500);
+    assert.strictEqual(rAgy.telemetry.outputTokens, 35);
+    assert.strictEqual(rAgy.telemetry.reasoningTokens, 25);
+    assert.strictEqual(rAgy.telemetry.totalTokens, 685);
+    assert(rAgy.feed.some((f) => f.kind === 'notice' && f.text.includes('agyPermissionMode')));
   });
 
   await test('3. isolator supports async CoW clone, heavy-dir/budget symlinks, scratch, direct manifest, and adoptWinner', async () => {
@@ -602,9 +691,12 @@ async function main() {
     assert(htmlMap.arena.includes('renderMarkdown('));
     assert(htmlMap.arena.includes('paneFilter'));
     assert(htmlMap.arena.includes('btnRerunTask'));
+    assert(htmlMap.arena.includes('addModeHeader'));
+    assert(htmlMap.arena.includes('value="agy"'));
     assert(htmlMap.analysis.includes('renderMarkdown('));
     assert(htmlMap.analysis.includes('Blind Mode Active'));
     assert(htmlMap.analysis.includes('btnCopyPrompt'));
+    assert(htmlMap.analysis.includes('btnAddAgentToRun'));
     assert(htmlMap.analysis.includes('deepTelemetry'));
     assert(htmlMap.analysis.includes('deepStats'));
     assert(htmlMap.analysis.includes('btnRunAiJudge'));
@@ -1083,6 +1175,178 @@ async function main() {
         assert.strictEqual(judgedTask.judgment.judgeType, 'agent');
         assert.strictEqual(judgedTask.judgment.winnerId, task.candidates[0].id);
         assert.strictEqual(judgedTask.judgment.notes, 'AI picked 0');
+
+        for (const sub of ctx.subscriptions) {
+          if (sub && typeof sub.dispose === 'function') sub.dispose();
+        }
+        ext.deactivate();
+      } finally {
+        Module._load = origLoad;
+      }
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await test('15. appendCandidates, prepareCandidatesEnvironment, stats judgedCandidateIds, and addCandidatesToTask flow', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'arena-add-agent-'));
+    try {
+      // A. Isolated apfs-cow baseline preservation + appendCandidates blind map & leaderboard safety
+      const wsCow = path.join(tmp, 'ws-cow');
+      fs.mkdirSync(wsCow, { recursive: true });
+      fs.writeFileSync(path.join(wsCow, 'note.txt'), 'v1\n', 'utf8');
+
+      const cowTask = store.createTask(wsCow, {
+        title: 'Existing CoW task',
+        prompt: 'Inspect workspace',
+        isolationMode: 'apfs-cow',
+        blindSeed: 123,
+        configs: [{ harness: 'custom', model: 'base-a', effort: '', commandTemplate: 'echo first' }],
+      });
+      await isolator.prepareTaskEnvironment(wsCow, cowTask);
+      cowTask.candidates[0].status = 'done';
+      cowTask.candidates[0].finalText = 'Original output';
+      cowTask.finishedAt = new Date().toISOString();
+      store.saveTask(wsCow, cowTask);
+      store.saveJudgment(wsCow, cowTask.id, {
+        judgeType: 'human',
+        winnerId: cowTask.candidates[0].id,
+        scores: { [cowTask.candidates[0].id]: { correctness: 5, clarity: 5, efficiency: 5 } },
+        notes: 'Initial verdict',
+      });
+
+      const beforeBlind = { ...store.loadTask(wsCow, cowTask.id).blindMap };
+      // Edit workspace after baseline was frozen; appended candidate must still receive v1 baseline!
+      fs.writeFileSync(path.join(wsCow, 'note.txt'), 'v2-after-task\n', 'utf8');
+
+      const { task: appendedCow, addedCandidates: cowAdded } = store.appendCandidates(wsCow, cowTask.id, [
+        { harness: 'custom', model: 'added-b', effort: 'high', commandTemplate: 'echo second' },
+      ]);
+      assert.strictEqual(appendedCow.candidates.length, 2);
+      assert.strictEqual(cowAdded.length, 1);
+      assert.strictEqual(appendedCow.blindMap[cowTask.candidates[0].id], beforeBlind[cowTask.candidates[0].id]);
+      assert.strictEqual(appendedCow.blindMap[cowAdded[0].id], 'Candidate B');
+      assert(appendedCow.judgment && appendedCow.judgment.winnerId === cowTask.candidates[0].id);
+
+      await isolator.prepareCandidatesEnvironment(wsCow, appendedCow, cowAdded);
+      assert.strictEqual(fs.readFileSync(path.join(cowAdded[0].workDir, 'note.txt'), 'utf8'), 'v1\n');
+
+      // Unjudged newly appended candidate must NOT be counted as a loss on the leaderboard yet
+      const boardMid = stats.computeLeaderboard([appendedCow]);
+      const rowA = boardMid.configs.find((c) => c.model === 'base-a');
+      const rowB = boardMid.configs.find((c) => c.model === 'added-b');
+      assert.strictEqual(rowA.wins, 1);
+      assert.strictEqual(rowB.nRuns, 1);
+      assert.strictEqual(rowB.nJudged, 0);
+      assert.strictEqual(rowB.losses, 0);
+
+      // B. Extension end-to-end: openArenaToAddAgent + addCandidatesToTask preserves cand 0 and runs ONLY cand 1
+      const wsExt = path.join(tmp, 'ws-ext');
+      fs.mkdirSync(wsExt, { recursive: true });
+      const panels = [];
+      const commands = new Map();
+      const globalStore = new Map();
+      const vscodeMock = {
+        ViewColumn: { One: 1, Beside: 2 },
+        StatusBarAlignment: { Left: 1, Right: 2 },
+        Uri: { file: (p) => ({ fsPath: p }) },
+        workspace: {
+          workspaceFolders: [{ uri: { fsPath: wsExt } }],
+          getConfiguration: () => ({ get: () => undefined }),
+          openTextDocument: async () => ({}),
+        },
+        window: {
+          createStatusBarItem: () => ({ show: () => {}, dispose: () => {} }),
+          registerWebviewViewProvider: () => ({ dispose: () => {} }),
+          createWebviewPanel: (_id, title) => {
+            let msgHandler = null;
+            const posted = [];
+            const panel = {
+              title,
+              webview: {
+                cspSource: 'vscode-webview://x',
+                html: '',
+                onDidReceiveMessage: (fn) => { msgHandler = fn; },
+                postMessage: (m) => { posted.push(m); },
+              },
+              reveal: () => {},
+              onDidDispose: () => {},
+              _trigger: (m) => msgHandler && msgHandler(m),
+              _posted: posted,
+            };
+            panels.push(panel);
+            return panel;
+          },
+          showInformationMessage: async () => undefined,
+          showWarningMessage: async () => undefined,
+          showErrorMessage: async () => undefined,
+          showTextDocument: async () => undefined,
+        },
+        commands: {
+          registerCommand: (id, fn) => { commands.set(id, fn); return { dispose: () => {} }; },
+          executeCommand: async () => undefined,
+        },
+      };
+
+      const seedTask = store.createTask(wsExt, {
+        title: 'Existing investigation run',
+        prompt: 'Analyze existing run',
+        isolationMode: 'scratch',
+        configs: [{ harness: 'custom', model: 'initial', effort: '', commandTemplate: 'echo SHOULD_NOT_RERUN' }],
+      });
+      await isolator.prepareTaskEnvironment(wsExt, seedTask);
+      seedTask.candidates[0].status = 'done';
+      seedTask.candidates[0].finalText = 'PRESERVED_CAND_0';
+      seedTask.candidates[0].durationMs = 1234;
+      seedTask.finishedAt = new Date().toISOString();
+      store.saveTask(wsExt, seedTask);
+
+      const origLoad = Module._load;
+      Module._load = function patched(request) {
+        if (request === 'vscode') return vscodeMock;
+        return origLoad.apply(this, arguments);
+      };
+      try {
+        delete require.cache[require.resolve(path.join(ROOT, 'extension.js'))];
+        const ext = require(path.join(ROOT, 'extension.js'));
+        const ctx = {
+          subscriptions: [],
+          globalState: {
+            get: (k) => globalStore.get(k),
+            update: async (k, v) => globalStore.set(k, v),
+          },
+        };
+        ext.activate(ctx);
+
+        commands.get('agentArena.openAnalysis')(seedTask.id);
+        const analysisP = panels[0];
+        await analysisP._trigger({ type: 'ready' });
+        await analysisP._trigger({ type: 'openArenaToAddAgent', taskId: seedTask.id });
+
+        const arenaP = panels[1];
+        assert(arenaP, 'openArenaToAddAgent must open the Arena panel');
+        await arenaP._trigger({ type: 'ready' });
+        const openStateMsg = arenaP._posted.find((m) => m.type === 'state' && m.payload.openAddDrawer === true);
+        assert(openStateMsg, 'Arena panel must receive openAddDrawer=true');
+
+        await arenaP._trigger({
+          type: 'addCandidatesToTask',
+          taskId: seedTask.id,
+          configs: [{
+            harness: 'custom',
+            model: 'late-comer',
+            effort: 'low',
+            commandTemplate: 'node -e "console.log(\'APPENDED_CAND_1_OK\')"',
+          }],
+        });
+
+        const updatedTask = store.loadTask(wsExt, seedTask.id);
+        assert.strictEqual(updatedTask.candidates.length, 2);
+        assert.strictEqual(updatedTask.candidates[0].finalText, 'PRESERVED_CAND_0');
+        assert.strictEqual(updatedTask.candidates[0].durationMs, 1234);
+        assert.strictEqual(updatedTask.candidates[1].status, 'done');
+        assert.strictEqual(updatedTask.candidates[1].finalText, 'APPENDED_CAND_1_OK');
+        assert(updatedTask.finishedAt, 'Task finishedAt must be updated once appended candidate settles');
 
         for (const sub of ctx.subscriptions) {
           if (sub && typeof sub.dispose === 'function') sub.dispose();

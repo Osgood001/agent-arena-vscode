@@ -2,6 +2,12 @@
 
 All notable changes to **Agent Arena** are documented in this file.
 
+## [0.5.0] - 2026-11-20
+
+### Added
+- **Antigravity (`agy`) Harness Support**: First-class support for Google Antigravity CLI (`agy`) across side-by-side runs, preset auto-discovery (`~/.gemini/antigravity-cli/settings.json` and `~/.gemini/bin/agy`), AI Agent Judge selection, `agentArena.agyPermissionMode` setting, and live `stream-json` parsing (streaming deltas, tool steps, thinking tokens, cache-read tokens, and headless permission notices).
+- **Add Agents to Existing Runs**: Append and execute one or more additional agent configurations directly inside any existing run (`+ Add Agent ▾` in the Arena topbar or `+ Add Agent` in Analysis) without re-running completed candidates or overwriting existing outputs and judgments. Preserves blind aliases, checks out the original frozen baseline in `apfs-cow` / `git-worktree` modes, and shields unjudged appended candidates from unfair leaderboard losses until re-judged.
+
 ## [0.4.0] - 2026-11-20
 
 ### Added
