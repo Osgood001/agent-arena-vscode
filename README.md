@@ -43,7 +43,9 @@ Uncluttered primary leaderboard (`Rank`, `Configuration`, `Elo`, `Win Rate`, `Av
   - Blindly masks submissions as `Candidate A/B/C` by default, attaches `.md` output files from isolated runs, accepts custom rubrics, persists scores and rationale (`⚡ AI Judge` provenance), and lets you review/adjust before saving.
 - **Add Agents to Existing Runs**:
   - Open any completed or active run in the Arena (`+ Add Agent ▾`) or click `+ Add Agent` in Analysis to append one or more new agent configurations using the exact same prompt and baseline—without re-running earlier candidates or losing saved outputs.
-- **Zero-Config Local Auto-Discovery**: When `agentArena.presets` is empty (default), Agent Arena safely inspects non-secret default model and effort fields from `~/.codex/config.toml`, `~/.claude/settings.json`, `~/.gemini/antigravity-cli/settings.json`, `~/.config/opencode/opencode.json`, and `~/.pi/agent/settings.json`.
+- **Zero-Config Local & Live Discovery**:
+  - When `agentArena.presets` is empty (default), Agent Arena safely inspects non-secret default model, effort, and CLI defaults from `~/.codex/config.toml`, `~/.claude/settings.json`, `~/.gemini/antigravity-cli/settings.json`, `~/.config/opencode/opencode.json`, and `~/.pi/agent/settings.json`.
+  - When Antigravity (`agy`) is installed, Agent Arena dynamically queries `agy models` and `agy agents` in the background and exposes every model and execution setting (`--effort`, `--mode`, `--agent`, `--sandbox`, `--disable-slash-commands`, `--settings`) through the **Antigravity Models** picker, `+ Custom` builder, and AI Judge selector.
 - **Four Execution Isolation Modes**:
   - `direct` *(default)*: Instant shared workspace execution.
   - `scratch`: Instant per-agent working folder with a `workspace` symlink back to your project root.
@@ -58,7 +60,7 @@ Uncluttered primary leaderboard (`Rank`, `Configuration`, `Elo`, `Win Rate`, `Av
 |---|---|---|---|
 | **Codex** (`codex`) | `codex` | Input, cached, output & reasoning tokens, turns, shell/file/MCP/web search tool calls | `~/.codex/config.toml` |
 | **Claude Code** (`claude`) | `claude` | Live & authoritative turns, input/cache/output/reasoning tokens, USD cost, tool calls, permission notices | `~/.claude/settings.json` |
-| **Antigravity** (`agy`) | `agy` | Live & authoritative turns, input/cache/output/thinking tokens, tool calls, permission notices | `~/.gemini/antigravity-cli/settings.json` |
+| **Antigravity** (`agy`) | `agy` | Live & authoritative turns, input/cache/output/thinking tokens, tool calls, permission notices, dynamic `agy models` & `agy agents` catalog | `~/.gemini/antigravity-cli/settings.json` |
 | **OpenCode** (`opencode`) | `opencode` | Step turns, input/cache/output/reasoning tokens, USD cost, tool calls & errors | `~/.config/opencode/opencode.json` |
 | **Pi** (`pi`) | `pi` | Turns, input/cache/output tokens, USD cost, tool execution events | `~/.pi/agent/settings.json` |
 | **DeepSeek Harness** (`dsh`) | `dsh` | Streamed output, filtered Node warnings, elapsed timing | `headless` profile |
@@ -79,7 +81,7 @@ code --install-extension Osgood001.agent-arena
 Download the latest `.vsix` from [Releases](https://github.com/Osgood001/agent-arena-vscode/releases) and install locally:
 
 ```sh
-code --install-extension agent-arena-0.5.0.vsix --force
+code --install-extension agent-arena-0.6.0.vsix --force
 ```
 
 ---
@@ -96,7 +98,11 @@ code --install-extension agent-arena-0.5.0.vsix --force
 | `agentArena.claudePermissionMode` | `"acceptEdits"` | Permission flag passed to Claude Code (`acceptEdits`, `bypassPermissions`, `auto`). |
 | `agentArena.codexSandboxMode` | `"workspace-write"` | Sandbox flag passed to Codex CLI (`workspace-write`, `danger-full-access`, `read-only`). |
 | `agentArena.opencodeAuto` | `true` | Pass `--auto` to OpenCode non-interactive runs. |
-| `agentArena.agyPermissionMode` | `"default"` | Permission mode passed to Antigravity (`agy`) (`default`, `accept-edits`, `auto`, `dangerously-skip-permissions`). |
+| `agentArena.agyPermissionMode` | `"default"` | Permission mode passed to Antigravity (`agy`) (`default`, `accept-edits`, `auto`, `plan`, `dangerously-skip-permissions`). |
+| `agentArena.agySandbox` | `false` | Pass `--sandbox` to run Antigravity commands inside its terminal sandbox. |
+| `agentArena.agyDisableSlashCommands` | `false` | Pass `--disable-slash-commands` to Antigravity headless print runs. |
+| `agentArena.agyAgent` | `""` | Default Antigravity agent profile passed via `--agent`. |
+| `agentArena.agySettings` | `""` | Optional session-only Antigravity settings JSON object or file path passed via `--settings`. |
 | `agentArena.judge.harness` | `""` | Coding agent harness assigned to judge runs (`""` = auto-pick first available CLI). |
 | `agentArena.judge.model` | `""` | Model passed to the judge agent (`""` = CLI default). |
 | `agentArena.judge.effort` | `"medium"` | Reasoning effort passed to the judge agent when supported. |

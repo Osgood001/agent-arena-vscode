@@ -35,6 +35,10 @@ function getConfig() {
     codexSandboxMode: cfg.get('codexSandboxMode') || 'workspace-write',
     opencodeAuto: cfg.get('opencodeAuto') !== false,
     agyPermissionMode: cfg.get('agyPermissionMode') || 'default',
+    agySandbox: Boolean(cfg.get('agySandbox')),
+    agyDisableSlashCommands: Boolean(cfg.get('agyDisableSlashCommands')),
+    agyAgent: cfg.get('agyAgent') || '',
+    agySettings: cfg.get('agySettings') || '',
     judge: {
       harness: cfg.get('judge.harness') || '',
       model: cfg.get('judge.model') || '',
@@ -62,6 +66,73 @@ function activate(context) {
   let launchInFlight = false;
   let pendingOpenAddDrawer = false;
   let statusTicker = null;
+  let isDisposed = false;
+  let agyCatalog = { models: [], agents: [], loading: false, fetchedAt: 0, error: null };
+  let agyCatalogPromise = null;
+  const catalogControllers = new Set();
+
+  function buildAgyDefaults(cfg) {
+    return {
+      permissionMode: cfg.agyPermissionMode || 'default',
+      sandbox: Boolean(cfg.agySandbox),
+      disableSlashCommands: Boolean(cfg.agyDisableSlashCommands),
+      agent: cfg.agyAgent || '',
+      settings: cfg.agySettings || '',
+    };
+  }
+
+  async function refreshAgyCatalog(force = false) {
+    if (isDisposed) return agyCatalog;
+    const detected = harnesses.detectHarnesses();
+    if (!detected.agy || !detected.agy.available) {
+      agyCatalog = { models: [], agents: [], loading: false, fetchedAt: 0, error: null };
+      return agyCatalog;
+    }
+    if (!force && agyCatalog.fetchedAt && Date.now() - agyCatalog.fetchedAt < 5 * 60 * 1000) {
+      return agyCatalog;
+    }
+    if (agyCatalogPromise) return agyCatalogPromise;
+
+    const ctrl = new AbortController();
+    catalogControllers.add(ctrl);
+    agyCatalog = { ...agyCatalog, loading: true, error: null };
+
+    agyCatalogPromise = (async () => {
+      try {
+        const res = await harnesses.discoverAgyCatalogAsync({
+          signal: ctrl.signal,
+          timeoutMs: 8000,
+        });
+        if (!isDisposed) {
+          agyCatalog = {
+            models: Array.isArray(res.models) ? res.models : [],
+            agents: Array.isArray(res.agents) ? res.agents : [],
+            loading: false,
+            fetchedAt: res.fetchedAt || Date.now(),
+            error: res.error || null,
+          };
+        }
+      } catch (err) {
+        if (!isDisposed) {
+          agyCatalog = {
+            ...agyCatalog,
+            loading: false,
+            error: err && err.message ? err.message : String(err),
+          };
+        }
+      } finally {
+        catalogControllers.delete(ctrl);
+        agyCatalogPromise = null;
+        if (!isDisposed) {
+          if (arenaPanel) pushArenaState(activeArenaTaskId);
+          if (analysisPanel) pushAnalysisState(activeAnalysisTaskId);
+        }
+      }
+      return agyCatalog;
+    })();
+
+    return agyCatalogPromise;
+  }
 
   // Clean up any orphaned running/pending tasks left over from a previous VS Code session
   store.reconcileStaleTasks(getWorkspaceRoot(), new Set());
@@ -163,6 +234,8 @@ function activate(context) {
         activeTask,
         defaultIsolationMode: cfg.defaultIsolationMode,
         openAddDrawer: Boolean(extra && extra.openAddDrawer),
+        agyCatalog,
+        agyDefaults: buildAgyDefaults(cfg),
         settingsSummary: {
           claudePermissionMode: cfg.claudePermissionMode,
           codexSandboxMode: cfg.codexSandboxMode,
@@ -189,6 +262,8 @@ function activate(context) {
         selectedTaskId: activeAnalysisTaskId,
         leaderboard: stats.computeLeaderboard(tasks, analysisFilter),
         harnesses: detected,
+        agyCatalog,
+        agyDefaults: buildAgyDefaults(cfg),
         judgeConfig: judge.resolveJudgeConfig({}, cfg.judge, detected),
         judgingTaskId: activeJudgeEntry ? activeJudgeEntry[0] : null,
         judgingLabel: activeJudgeEntry ? activeJudgeEntry[1].label : '',
@@ -383,6 +458,10 @@ function activate(context) {
           codexSandboxMode: cfg.codexSandboxMode,
           opencodeAuto: cfg.opencodeAuto,
           agyPermissionMode: cfg.agyPermissionMode,
+          agySandbox: cfg.agySandbox,
+          agyDisableSlashCommands: cfg.agyDisableSlashCommands,
+          agyAgent: cfg.agyAgent,
+          agySettings: cfg.agySettings,
         },
         {
           onProgress: (prog) => {
@@ -603,6 +682,11 @@ function activate(context) {
         const openAddDrawer = pendingOpenAddDrawer;
         pendingOpenAddDrawer = false;
         pushArenaState(activeArenaTaskId, { openAddDrawer });
+        if (process.env.AGENT_ARENA_SKIP_LIVE_CATALOG !== '1' && agyCatalog.fetchedAt === 0) {
+          void refreshAgyCatalog(false);
+        }
+      } else if (msg.type === 'refreshAgyCatalog') {
+        await refreshAgyCatalog(true);
       } else if (msg.type === 'selectTask') {
         pushArenaState(msg.taskId || null);
       } else if (msg.type === 'launchTask') {
@@ -634,6 +718,7 @@ function activate(context) {
               effort: c.effort,
               extraArgs: c.extraArgs || [],
               commandTemplate: c.commandTemplate || '',
+              agyOptions: c.agyOptions || null,
             })),
           });
         }
@@ -689,6 +774,11 @@ function activate(context) {
       if (!msg) return;
       if (msg.type === 'ready' || msg.type === 'refresh') {
         pushAnalysisState(activeAnalysisTaskId, msg.type === 'ready' ? tab : null);
+        if (process.env.AGENT_ARENA_SKIP_LIVE_CATALOG !== '1' && agyCatalog.fetchedAt === 0) {
+          void refreshAgyCatalog(false);
+        }
+      } else if (msg.type === 'refreshAgyCatalog') {
+        await refreshAgyCatalog(true);
       } else if (msg.type === 'openArena') {
         openArenaPanel(msg.taskId);
       } else if (msg.type === 'openArenaToAddAgent') {
@@ -757,6 +847,10 @@ function activate(context) {
           claudePermissionMode: cfg.claudePermissionMode,
           opencodeAuto: cfg.opencodeAuto,
           agyPermissionMode: cfg.agyPermissionMode,
+          agySandbox: cfg.agySandbox,
+          agyDisableSlashCommands: cfg.agyDisableSlashCommands,
+          agyAgent: cfg.agyAgent,
+          agySettings: cfg.agySettings,
           timeoutMinutes: Math.min(cfg.timeoutMinutes || 30, 10),
         });
         activeJudges.set(task.id, { cancel: handle.cancel, label: handle.judgeConfig.label });
@@ -824,6 +918,9 @@ function activate(context) {
         if (!msg) return;
         if (msg.type === 'ready') {
           pushSidebarState();
+          if (process.env.AGENT_ARENA_SKIP_LIVE_CATALOG !== '1' && agyCatalog.fetchedAt === 0) {
+            void refreshAgyCatalog(false);
+          }
         } else if (msg.type === 'openArena') {
           openArenaPanel(msg.taskId);
         } else if (msg.type === 'openAnalysis') {
@@ -861,9 +958,12 @@ function activate(context) {
   context.subscriptions.push(
     {
       dispose: () => {
+        isDisposed = true;
         cancelTask(null);
         for (const active of activeJudges.values()) active.cancel();
         activeJudges.clear();
+        for (const ctrl of catalogControllers) ctrl.abort();
+        catalogControllers.clear();
       },
     },
     vscode.window.registerWebviewViewProvider('agentArena.sidebar', sidebarProvider),

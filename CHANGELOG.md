@@ -2,6 +2,13 @@
 
 All notable changes to **Agent Arena** are documented in this file.
 
+## [0.6.0] - 2026-11-21
+
+### Added
+- **Live Antigravity (`agy`) Models & Agents Discovery**: Dynamically queries `agy models` and `agy agents` asynchronously in the background (`discoverAgyCatalogAsync`), strips CLI spinners safely, and groups available models without hardcoding model lists.
+- **Minimalist Antigravity Model & Settings Picker**: Added a collapsible **✦ Antigravity Models (N)** browser directly inside the Arena preset bar (search, auto-derived family tabs, per-run `--effort`, `--mode`, `--agent`, `--sandbox`, and `--disable-slash-commands` controls) plus autocomplete and `--settings` overrides in `+ Custom` and AI Judge model/effort inputs.
+- **Expanded Antigravity VS Code Settings & Per-Candidate Overrides**: Added `agentArena.agySandbox`, `agentArena.agyDisableSlashCommands`, `agentArena.agyAgent`, `agentArena.agySettings`, `"plan"` in `agentArena.agyPermissionMode`, and per-preset/per-column `agyOptions` tracked cleanly in Leaderboard config keys (`makeConfigKey`).
+
 ## [0.5.0] - 2026-11-20
 
 ### Added

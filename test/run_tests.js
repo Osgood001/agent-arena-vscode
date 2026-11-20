@@ -1,5 +1,7 @@
 'use strict';
 
+process.env.AGENT_ARENA_SKIP_LIVE_CATALOG = '1';
+
 const assert = require('assert');
 const { execFileSync } = require('child_process');
 const fs = require('fs');
@@ -102,6 +104,52 @@ async function main() {
     assert(!agyDef.args.includes('--dangerously-skip-permissions'));
     assert(harnesses.buildChildEnv().PATH.includes(path.join('.gemini', 'bin')));
 
+    // Per-candidate agyOptions override global flags & parseAgyModelsOutput / parseAgyAgentsOutput
+    const agyOverrideCmd = harnesses.buildCommand(
+      {
+        ...base,
+        harness: 'agy',
+        agyOptions: {
+          permissionMode: 'plan',
+          sandbox: true,
+          disableSlashCommands: true,
+          agent: 'reviewer',
+          settings: '/tmp/custom-agy.json',
+        },
+      },
+      task,
+      { agyPermissionMode: 'default', agySandbox: false, agyDisableSlashCommands: false },
+    );
+    assert.strictEqual(agyOverrideCmd.args[agyOverrideCmd.args.indexOf('--mode') + 1], 'plan');
+    assert(agyOverrideCmd.args.includes('--sandbox'));
+    assert(agyOverrideCmd.args.includes('--disable-slash-commands'));
+    assert.strictEqual(agyOverrideCmd.args[agyOverrideCmd.args.indexOf('--agent') + 1], 'reviewer');
+    assert.strictEqual(agyOverrideCmd.args[agyOverrideCmd.args.indexOf('--settings') + 1], '/tmp/custom-agy.json');
+
+    const parsedModels = harnesses.parseAgyModelsOutput(
+      '\r\x1b[2K⠋ Fetching available models...\r\x1b[2Kalpha-pro-high\tAlpha Pro (High)\n' +
+      'alpha-pro-low\tAlpha Pro (Low)\r\nbeta-orch\tOrchestrator (Beta)\n' +
+      'gamma-oss\tGPT-OSS 120B (Medium)\n\n',
+    );
+    assert.strictEqual(parsedModels.length, 4);
+    assert.deepStrictEqual(parsedModels[0], { id: 'alpha-pro-high', label: 'Alpha Pro (High)', group: 'Alpha', hasEmbeddedEffort: true });
+    assert.deepStrictEqual(parsedModels[2], { id: 'beta-orch', label: 'Orchestrator (Beta)', group: 'Orchestrator', hasEmbeddedEffort: false });
+    assert.strictEqual(parsedModels[3].group, 'GPT-OSS');
+
+    const parsedAgents = harnesses.parseAgyAgentsOutput(
+      '⠋ Fetching agents...\nreviewer\tCode Reviewer\nplanner  Architecture Planner\n',
+    );
+    assert.deepStrictEqual(parsedAgents, [
+      { id: 'reviewer', label: 'Code Reviewer' },
+      { id: 'planner', label: 'Architecture Planner' },
+    ]);
+
+    assert.strictEqual(harnesses.normalizeAgyOptions({ permissionMode: '', sandbox: null }), null);
+    assert.deepStrictEqual(
+      harnesses.normalizeAgyOptions({ permissionMode: 'plan', sandbox: true }),
+      { permissionMode: 'plan', sandbox: true, disableSlashCommands: null, agent: '', settings: '' },
+    );
+
     const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'arena-home-'));
     try {
       fs.mkdirSync(path.join(fakeHome, '.codex'), { recursive: true });
@@ -119,7 +167,13 @@ async function main() {
       fs.mkdirSync(path.join(fakeHome, '.gemini', 'antigravity-cli'), { recursive: true });
       fs.writeFileSync(
         path.join(fakeHome, '.gemini', 'antigravity-cli', 'settings.json'),
-        JSON.stringify({ model: 'gemini-pro-test', effort: 'high' }),
+        JSON.stringify({
+          model: 'gemini-pro-test',
+          effort: 'high',
+          agentMode: 'plan',
+          enableTerminalSandbox: true,
+          disableSlashCommands: true,
+        }),
         'utf8',
       );
       fs.mkdirSync(path.join(fakeHome, '.config', 'opencode'), { recursive: true });
@@ -141,6 +195,9 @@ async function main() {
       assert.strictEqual(defs.claude.model, 'claude-sonnet-4');
       assert.strictEqual(defs.agy.model, 'gemini-pro-test');
       assert.strictEqual(defs.agy.effort, 'high');
+      assert.strictEqual(defs.agy.agentMode, 'plan');
+      assert.strictEqual(defs.agy.enableTerminalSandbox, true);
+      assert.strictEqual(defs.agy.disableSlashCommands, true);
       assert.strictEqual(defs.opencode.model, 'deepseek/deepseek-chat');
       assert.strictEqual(defs.pi.model, 'anthropic/claude-haiku');
       assert.strictEqual(defs.pi.effort, 'low');
@@ -693,10 +750,15 @@ async function main() {
     assert(htmlMap.arena.includes('btnRerunTask'));
     assert(htmlMap.arena.includes('addModeHeader'));
     assert(htmlMap.arena.includes('value="agy"'));
+    assert(htmlMap.arena.includes('agyPicker'));
+    assert(htmlMap.arena.includes('agyModelList'));
+    assert(htmlMap.arena.includes('agyPickMode'));
+    assert(htmlMap.arena.includes('agyPickSandbox'));
     assert(htmlMap.analysis.includes('renderMarkdown('));
     assert(htmlMap.analysis.includes('Blind Mode Active'));
     assert(htmlMap.analysis.includes('btnCopyPrompt'));
     assert(htmlMap.analysis.includes('btnAddAgentToRun'));
+    assert(htmlMap.analysis.includes('agyJudgeModelList'));
     assert(htmlMap.analysis.includes('deepTelemetry'));
     assert(htmlMap.analysis.includes('deepStats'));
     assert(htmlMap.analysis.includes('btnRunAiJudge'));
@@ -1354,6 +1416,159 @@ async function main() {
         ext.deactivate();
       } finally {
         Module._load = origLoad;
+      }
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await test('16. store agyOptions distinct configKey, persistence, and extension refreshAgyCatalog/agyDefaults wiring', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'arena-agy-cat-'));
+    try {
+      const key1 = store.makeConfigKey({ harness: 'agy', model: 'synth-m1', effort: 'high' });
+      const key2 = store.makeConfigKey({
+        harness: 'agy',
+        model: 'synth-m1',
+        effort: 'high',
+        agyOptions: { permissionMode: 'plan', sandbox: true, agent: 'reviewer' },
+      });
+      assert.strictEqual(key1, 'agy · synth-m1 (high)');
+      assert.strictEqual(key2, 'agy · synth-m1 (high) [plan, sandbox, agent:reviewer]');
+      assert.notStrictEqual(key1, key2);
+
+      const t = store.createTask(tmp, {
+        title: 'Agy opts persistence',
+        prompt: 'Compare settings',
+        isolationMode: 'scratch',
+        configs: [
+          { harness: 'agy', model: 'synth-m1', effort: 'low', agyOptions: { sandbox: true } },
+        ],
+      });
+      assert.deepStrictEqual(t.candidates[0].agyOptions, { sandbox: true });
+
+      const { addedCandidates } = store.appendCandidates(tmp, t.id, [
+        { harness: 'agy', model: 'synth-m1', effort: 'low', agyOptions: { permissionMode: 'plan', disableSlashCommands: true } },
+      ]);
+      assert.deepStrictEqual(addedCandidates[0].agyOptions, { permissionMode: 'plan', disableSlashCommands: true });
+      const reloaded = store.loadTask(tmp, t.id);
+      assert.notStrictEqual(reloaded.candidates[0].configKey, reloaded.candidates[1].configKey);
+
+      const panels = [];
+      const commands = new Map();
+      const globalStore = new Map();
+      const mockCfg = new Map([
+        ['agyPermissionMode', 'plan'],
+        ['agySandbox', true],
+        ['agyDisableSlashCommands', true],
+        ['agyAgent', 'architect'],
+        ['agySettings', '/tmp/s.json'],
+      ]);
+      const origDiscover = harnesses.discoverAgyCatalogAsync;
+      const origDetect = harnesses.detectHarnesses;
+      harnesses.detectHarnesses = () => ({
+        ...origDetect(),
+        agy: { available: true, path: '/usr/local/bin/agy-mock' },
+      });
+      harnesses.discoverAgyCatalogAsync = async () => ({
+        models: [
+          { id: 'synth-pro-high', label: 'Synth Pro (High)', group: 'Synth', hasEmbeddedEffort: true },
+          { id: 'synth-flash-low', label: 'Synth Flash (Low)', group: 'Synth', hasEmbeddedEffort: true },
+        ],
+        agents: [{ id: 'architect', label: 'Architect' }],
+        fetchedAt: Date.now(),
+        error: null,
+      });
+
+      const vscodeMock = {
+        ViewColumn: { One: 1, Beside: 2 },
+        StatusBarAlignment: { Left: 1, Right: 2 },
+        Uri: { file: (p) => ({ fsPath: p }) },
+        workspace: {
+          workspaceFolders: [{ uri: { fsPath: tmp } }],
+          getConfiguration: () => ({ get: (k) => mockCfg.get(k) }),
+          openTextDocument: async () => ({}),
+        },
+        window: {
+          createStatusBarItem: () => ({ show: () => {}, dispose: () => {} }),
+          registerWebviewViewProvider: () => ({ dispose: () => {} }),
+          createWebviewPanel: (_id, title) => {
+            let msgHandler = null;
+            const posted = [];
+            const panel = {
+              title,
+              webview: {
+                cspSource: 'vscode-webview://x',
+                html: '',
+                onDidReceiveMessage: (fn) => { msgHandler = fn; },
+                postMessage: (m) => { posted.push(m); },
+              },
+              reveal: () => {},
+              onDidDispose: () => {},
+              _trigger: (m) => msgHandler && msgHandler(m),
+              _posted: posted,
+            };
+            panels.push(panel);
+            return panel;
+          },
+          showInformationMessage: async () => undefined,
+          showWarningMessage: async () => undefined,
+          showErrorMessage: async () => undefined,
+          showTextDocument: async () => undefined,
+        },
+        commands: {
+          registerCommand: (id, fn) => { commands.set(id, fn); return { dispose: () => {} }; },
+          executeCommand: async () => undefined,
+        },
+      };
+
+      const origLoad = Module._load;
+      Module._load = function patched(request) {
+        if (request === 'vscode') return vscodeMock;
+        return origLoad.apply(this, arguments);
+      };
+      try {
+        delete require.cache[require.resolve(path.join(ROOT, 'extension.js'))];
+        const ext = require(path.join(ROOT, 'extension.js'));
+        const ctx = {
+          subscriptions: [],
+          globalState: {
+            get: (k) => globalStore.get(k),
+            update: async (k, v) => globalStore.set(k, v),
+          },
+        };
+        ext.activate(ctx);
+
+        commands.get('agentArena.openArena')();
+        commands.get('agentArena.openAnalysis')();
+        const arenaP = panels[0];
+        const analysisP = panels[1];
+        await arenaP._trigger({ type: 'ready' });
+        await analysisP._trigger({ type: 'ready' });
+
+        await arenaP._trigger({ type: 'refreshAgyCatalog' });
+
+        const latestArenaState = [...arenaP._posted].reverse().find((m) => m.type === 'state');
+        const latestAnalysisState = [...analysisP._posted].reverse().find((m) => m.type === 'state');
+        assert(latestArenaState && latestArenaState.payload.agyCatalog.models.length === 2);
+        assert.strictEqual(latestArenaState.payload.agyCatalog.agents[0].id, 'architect');
+        assert.deepStrictEqual(latestArenaState.payload.agyDefaults, {
+          permissionMode: 'plan',
+          sandbox: true,
+          disableSlashCommands: true,
+          agent: 'architect',
+          settings: '/tmp/s.json',
+        });
+        assert(latestAnalysisState && latestAnalysisState.payload.agyCatalog.models.length === 2);
+        assert.strictEqual(latestAnalysisState.payload.agyDefaults.permissionMode, 'plan');
+
+        for (const sub of ctx.subscriptions) {
+          if (sub && typeof sub.dispose === 'function') sub.dispose();
+        }
+        ext.deactivate();
+      } finally {
+        Module._load = origLoad;
+        harnesses.discoverAgyCatalogAsync = origDiscover;
+        harnesses.detectHarnesses = origDetect;
       }
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });

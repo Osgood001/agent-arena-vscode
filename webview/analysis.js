@@ -274,6 +274,14 @@ function renderAnalysisHtml(webview) {
 
   <div id="viewRun"></div>
   <div id="viewBoard" style="display:none;"></div>
+  <datalist id="agyJudgeModelList"></datalist>
+  <datalist id="agyJudgeEffortList">
+    <option value="low"></option>
+    <option value="medium"></option>
+    <option value="high"></option>
+    <option value="xhigh"></option>
+    <option value="max"></option>
+  </datalist>
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
@@ -284,6 +292,8 @@ function renderAnalysisHtml(webview) {
       selectedTaskId: null,
       leaderboard: null,
       harnesses: {},
+      agyCatalog: { models: [], agents: [], loading: false, fetchedAt: 0, error: null },
+      agyDefaults: { permissionMode: 'default', sandbox: false, disableSlashCommands: false, agent: '', settings: '' },
       judgeConfig: { harness: 'codex', model: '', effort: 'medium', blind: true, rubric: '' },
       judgingTaskId: null,
       judgingLabel: '',
@@ -696,8 +706,8 @@ function renderAnalysisHtml(webview) {
             '<div class="ai-judge-inputs">' +
               '<span style="font-weight:600;">AI Judge:</span>' +
               '<select id="judgeHarness" title="Coding agent assigned to evaluate outputs">' + harnessOptions + '</select>' +
-              '<input id="judgeModel" type="text" placeholder="Model (auto)" value="' + esc(jCfg.model || '') + '" style="width:140px;" />' +
-              '<input id="judgeEffort" type="text" placeholder="Effort" value="' + esc(jCfg.effort || '') + '" style="width:85px;" />' +
+              '<input id="judgeModel" type="text" placeholder="Model (auto)" value="' + esc(jCfg.model || '') + '" style="width:140px;"' + (jCfg.harness === 'agy' ? ' list="agyJudgeModelList"' : '') + ' />' +
+              '<input id="judgeEffort" type="text" placeholder="Effort" value="' + esc(jCfg.effort || '') + '" style="width:85px;"' + (jCfg.harness === 'agy' ? ' list="agyJudgeEffortList"' : '') + ' />' +
               '<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input id="judgeBlind" type="checkbox"' + (jCfg.blind ? ' checked' : '') + ' /> Blind</label>' +
               '<button id="btnSaveJudgeCfg" class="ghost" style="font-size:11.5px;padding:3px 7px;" title="Save judge settings as default">Save Default</button>' +
             '</div>' +
@@ -967,7 +977,30 @@ function renderAnalysisHtml(webview) {
         '</tr></thead><tbody>' + (ledgerRows || '<tr><td colspan="4" class="muted">No matching runs.</td></tr>') + '</tbody></table></div>';
     }
 
+    function syncJudgeAgyLists() {
+      const dl = document.getElementById('agyJudgeModelList');
+      if (dl) {
+        const models = (state.agyCatalog && state.agyCatalog.models) || [];
+        dl.innerHTML = models.map((m) =>
+          '<option value="' + esc(m.id) + '">' + esc(m.label || m.id) + '</option>'
+        ).join('');
+      }
+      const hEl = document.getElementById('judgeHarness');
+      const mEl = document.getElementById('judgeModel');
+      const eEl = document.getElementById('judgeEffort');
+      if (hEl && mEl && eEl) {
+        if (hEl.value === 'agy') {
+          mEl.setAttribute('list', 'agyJudgeModelList');
+          eEl.setAttribute('list', 'agyJudgeEffortList');
+        } else {
+          mEl.removeAttribute('list');
+          eEl.removeAttribute('list');
+        }
+      }
+    }
+
     function renderAll() {
+      syncJudgeAgyLists();
       const tasks = state.tasks || [];
       taskPicker.innerHTML = tasks.map((t) => {
         const sel = t.id === state.selectedTaskId ? ' selected' : '';
@@ -978,6 +1011,9 @@ function renderAnalysisHtml(webview) {
     }
 
     viewRun.addEventListener('change', (e) => {
+      if (e.target.id === 'judgeHarness') {
+        syncJudgeAgyLists();
+      }
       if (['judgeHarness', 'judgeModel', 'judgeEffort', 'judgeBlind', 'judgeRubric'].includes(e.target.id)) {
         readJudgeInputsFromDom();
       }

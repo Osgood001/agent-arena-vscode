@@ -2,7 +2,7 @@
   "name": "agent-arena",
   "displayName": "Agent Arena",
   "description": "Run multiple AI coding harnesses, models, and reasoning efforts side-by-side in VS Code, and analyze token usage, elapsed time, diffs, and blind outcomes.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "Osgood001",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -168,6 +168,34 @@
               },
               "commandTemplate": {
                 "type": "string"
+              },
+              "agyOptions": {
+                "type": "object",
+                "properties": {
+                  "permissionMode": {
+                    "type": "string",
+                    "enum": [
+                      "",
+                      "default",
+                      "accept-edits",
+                      "auto",
+                      "plan",
+                      "dangerously-skip-permissions"
+                    ]
+                  },
+                  "sandbox": {
+                    "type": "boolean"
+                  },
+                  "disableSlashCommands": {
+                    "type": "boolean"
+                  },
+                  "agent": {
+                    "type": "string"
+                  },
+                  "settings": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
@@ -249,10 +277,31 @@
             "default",
             "accept-edits",
             "auto",
+            "plan",
             "dangerously-skip-permissions"
           ],
           "default": "default",
           "description": "Permission mode passed to Antigravity (agy) headless runs. default leaves ~/.gemini/antigravity-cli/settings.json rules in effect."
+        },
+        "agentArena.agySandbox": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pass --sandbox to run Antigravity commands inside its terminal sandbox."
+        },
+        "agentArena.agyDisableSlashCommands": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pass --disable-slash-commands to Antigravity headless print runs."
+        },
+        "agentArena.agyAgent": {
+          "type": "string",
+          "default": "",
+          "description": "Default Antigravity agent profile passed via --agent."
+        },
+        "agentArena.agySettings": {
+          "type": "string",
+          "default": "",
+          "description": "Optional session-only Antigravity settings JSON object or file path passed via --settings."
         },
         "agentArena.judge.harness": {
           "type": "string",

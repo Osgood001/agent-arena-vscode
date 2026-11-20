@@ -86,6 +86,72 @@ function renderArenaHtml(webview) {
       padding-top: 4px;
     }
     .custom-drawer.open { display: flex; }
+    .agy-picker {
+      display: none;
+      flex-direction: column;
+      gap: 7px;
+      padding: 9px 10px;
+      border: 1px solid var(--aa-border);
+      border-radius: 6px;
+      background: var(--aa-bg);
+    }
+    .agy-picker.open { display: flex; }
+    .agy-picker-top, .agy-picker-opts {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+    }
+    .agy-group-pills {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .agy-models-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+      gap: 5px;
+      max-height: 210px;
+      overflow-y: auto;
+      padding-top: 2px;
+    }
+    .agy-model-card {
+      text-align: left;
+      padding: 5px 8px;
+      border-radius: 5px;
+      border: 1px solid var(--aa-border);
+      background: var(--aa-subtle);
+      color: var(--aa-fg);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      font-size: 11.5px;
+    }
+    .agy-model-card:hover { border-color: var(--aa-teal); }
+    .agy-model-card.selected {
+      background: rgba(42, 140, 130, 0.16);
+      border-color: var(--aa-teal);
+    }
+    .agy-model-id {
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 10.5px;
+      color: var(--aa-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .cust-agy-opts {
+      display: none;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      padding-top: 4px;
+      font-size: 11.5px;
+    }
+    .cust-agy-opts.open { display: flex; }
     .tutorial-strip {
       display: none;
       align-items: center;
@@ -369,6 +435,46 @@ function renderArenaHtml(webview) {
   <div id="agentsDrawer" class="drawer-wrap">
     <div id="addModeHeader" class="add-mode-bar" style="display:none;"></div>
     <div id="presetBar" class="preset-bar"></div>
+    <div id="agyPicker" class="agy-picker">
+      <div class="agy-picker-top">
+        <input id="agySearchInput" type="text" placeholder="Filter Antigravity models…" style="width:185px;" />
+        <div id="agyGroupPills" class="agy-group-pills"></div>
+        <span style="flex:1 1 auto;"></span>
+        <button id="btnRefreshAgyCatalog" class="ghost" style="font-size:11px;padding:2px 7px;" title="Refresh models &amp; agents from agy CLI">↻</button>
+        <button id="btnCloseAgyPicker" class="ghost" style="font-size:11px;padding:2px 7px;">Close</button>
+      </div>
+      <div class="agy-picker-opts">
+        <label style="display:inline-flex;align-items:center;gap:4px;">Effort
+          <select id="agyPickEffort" title="Reasoning effort passed via --effort (empty = model default)">
+            <option value="">Auto (model default)</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+            <option value="xhigh">xhigh</option>
+            <option value="max">max</option>
+          </select>
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:4px;">Mode
+          <select id="agyPickMode" title="Antigravity execution mode">
+            <option value="default">default</option>
+            <option value="accept-edits">accept-edits</option>
+            <option value="auto">auto</option>
+            <option value="plan">plan</option>
+            <option value="dangerously-skip-permissions">skip-permissions</option>
+          </select>
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:4px;">Agent
+          <input id="agyPickAgent" type="text" list="agyAgentList" placeholder="Agent (default)" style="width:120px;" />
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
+          <input id="agyPickSandbox" type="checkbox" /> Sandbox
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
+          <input id="agyPickNoSlash" type="checkbox" /> No slash cmds
+        </label>
+      </div>
+      <div id="agyModelsGrid" class="agy-models-grid"></div>
+    </div>
     <div id="customDrawer" class="custom-drawer">
       <select id="custHarness">
         <option value="codex">codex</option>
@@ -379,13 +485,36 @@ function renderArenaHtml(webview) {
         <option value="dsh">dsh</option>
         <option value="custom">custom shell</option>
       </select>
-      <input id="custModel" type="text" placeholder="Model (optional, e.g. sonnet, o3, gemini-2.5-pro)" style="width:240px;" />
+      <input id="custModel" type="text" placeholder="Model (optional, e.g. sonnet, o3)" style="width:240px;" />
       <input id="custEffort" type="text" placeholder="Effort (low/medium/high)" style="width:145px;" />
       <input id="custArgs" type="text" placeholder="Extra args" style="width:120px;" />
       <input id="custTpl" type="text" placeholder="Custom cmd template ({prompt_file}, {cwd})" style="width:230px;display:none;" />
       <button id="btnAddCustom" class="primary">Add</button>
       <button id="btnCloseCustom" class="ghost">Close</button>
+      <div id="custAgyOpts" class="cust-agy-opts">
+        <select id="custAgyMode" title="Antigravity mode">
+          <option value="">Mode: Global default</option>
+          <option value="default">Mode: default</option>
+          <option value="accept-edits">Mode: accept-edits</option>
+          <option value="auto">Mode: auto</option>
+          <option value="plan">Mode: plan</option>
+          <option value="dangerously-skip-permissions">Mode: skip-permissions</option>
+        </select>
+        <input id="custAgyAgent" type="text" list="agyAgentList" placeholder="--agent (optional)" style="width:130px;" />
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input id="custAgySandbox" type="checkbox" /> --sandbox</label>
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input id="custAgyNoSlash" type="checkbox" /> --disable-slash-commands</label>
+        <input id="custAgySettings" type="text" placeholder="--settings JSON or path" style="width:185px;" />
+      </div>
     </div>
+    <datalist id="agyModelList"></datalist>
+    <datalist id="agyEffortList">
+      <option value="low"></option>
+      <option value="medium"></option>
+      <option value="high"></option>
+      <option value="xhigh"></option>
+      <option value="max"></option>
+    </datalist>
+    <datalist id="agyAgentList"></datalist>
   </div>
 
   <div id="tutorialBanner" class="tutorial-strip"></div>
@@ -427,7 +556,9 @@ function renderArenaHtml(webview) {
       activeTaskId: null,
       activeTask: null,
       defaultIsolationMode: 'direct',
-      settingsSummary: { claudePermissionMode: 'acceptEdits', codexSandboxMode: 'workspace-write' },
+      agyCatalog: { models: [], agents: [], loading: false, fetchedAt: 0, error: null },
+      agyDefaults: { permissionMode: 'default', sandbox: false, disableSlashCommands: false, agent: '', settings: '' },
+      settingsSummary: { claudePermissionMode: 'acceptEdits', codexSandboxMode: 'workspace-write', agyPermissionMode: 'default' },
       tutorial: { visible: false, taskId: null, completed: false },
     };
     let draftAgents = [];
@@ -438,6 +569,10 @@ function renderArenaHtml(webview) {
     let rawCache = {};      // candId -> string
     let fileCache = {};     // taskId::candId::relPath -> { text, error }
     let agentsDrawerOpen = null; // null = auto (open in draft, collapsed in active run)
+    let agyPickerOpen = false;
+    let agySearchQuery = '';
+    let agyGroupFilter = '';
+    let agyPickerInitialized = false;
     let isLaunching = false;
     let isAddingAgents = false;
     let scrollColumnsToEndNext = false;
@@ -448,6 +583,16 @@ function renderArenaHtml(webview) {
     const addModeHeader = document.getElementById('addModeHeader');
     const btnAgentsDrawer = document.getElementById('btnAgentsDrawer');
     const presetBar = document.getElementById('presetBar');
+    const agyPicker = document.getElementById('agyPicker');
+    const agySearchInput = document.getElementById('agySearchInput');
+    const agyGroupPills = document.getElementById('agyGroupPills');
+    const agyModelsGrid = document.getElementById('agyModelsGrid');
+    const custHarnessEl = document.getElementById('custHarness');
+    const custModelEl = document.getElementById('custModel');
+    const custEffortEl = document.getElementById('custEffort');
+    const custAgyOptsEl = document.getElementById('custAgyOpts');
+    const agyModelListEl = document.getElementById('agyModelList');
+    const agyAgentListEl = document.getElementById('agyAgentList');
     const tutorialBanner = document.getElementById('tutorialBanner');
     const columnsWrap = document.getElementById('columnsWrap');
     const promptInput = document.getElementById('promptInput');
@@ -464,10 +609,88 @@ function renderArenaHtml(webview) {
     const sinceBadge = document.getElementById('sinceBadge');
     const composerStatus = document.getElementById('composerStatus');
 
+    function normalizeAgyOptsClient(raw) {
+      if (!raw || typeof raw !== 'object') return null;
+      const pm = typeof raw.permissionMode === 'string' ? raw.permissionMode.trim() : '';
+      const sb = typeof raw.sandbox === 'boolean' ? raw.sandbox : null;
+      const ns = typeof raw.disableSlashCommands === 'boolean' ? raw.disableSlashCommands : null;
+      const ag = typeof raw.agent === 'string' ? raw.agent.trim() : '';
+      const st = typeof raw.settings === 'string' ? raw.settings.trim() : '';
+      if (!pm && sb === null && ns === null && !ag && !st) return null;
+      return { permissionMode: pm, sandbox: sb, disableSlashCommands: ns, agent: ag, settings: st };
+    }
+
+    function agyOptionsSuffix(agyOptions) {
+      if (!agyOptions || typeof agyOptions !== 'object') return '';
+      const parts = [];
+      const pm = typeof agyOptions.permissionMode === 'string' ? agyOptions.permissionMode.trim() : '';
+      if (pm && pm !== 'default') parts.push(pm);
+      if (agyOptions.sandbox === true) parts.push('sandbox');
+      if (agyOptions.disableSlashCommands === true) parts.push('no-slash');
+      const ag = typeof agyOptions.agent === 'string' ? agyOptions.agent.trim() : '';
+      if (ag) parts.push('agent:' + ag);
+      const st = typeof agyOptions.settings === 'string' ? agyOptions.settings.trim() : '';
+      if (st) parts.push('custom-settings');
+      return parts.length ? (' [' + parts.join(', ') + ']') : '';
+    }
+
     function configKeyOf(c) {
       const m = (c.model || '').trim() || 'default';
       const e = (c.effort || '').trim();
-      return e ? (c.harness + ' · ' + m + ' (' + e + ')') : (c.harness + ' · ' + m);
+      const base = e ? (c.harness + ' · ' + m + ' (' + e + ')') : (c.harness + ' · ' + m);
+      const suffix = c.harness === 'agy' ? agyOptionsSuffix(c.agyOptions) : '';
+      return base + suffix;
+    }
+
+    function syncAgyDatalists() {
+      const models = (state.agyCatalog && state.agyCatalog.models) || [];
+      const agents = (state.agyCatalog && state.agyCatalog.agents) || [];
+      if (agyModelListEl) {
+        agyModelListEl.innerHTML = models.map((m) =>
+          '<option value="' + esc(m.id) + '">' + esc(m.label || m.id) + '</option>'
+        ).join('');
+      }
+      if (agyAgentListEl) {
+        agyAgentListEl.innerHTML = agents.map((a) =>
+          '<option value="' + esc(a.id) + '">' + esc(a.label || a.id) + '</option>'
+        ).join('');
+      }
+    }
+
+    function syncCustomAgyUi() {
+      const h = custHarnessEl.value;
+      document.getElementById('custTpl').style.display = h === 'custom' ? 'inline-block' : 'none';
+      const isAgy = h === 'agy';
+      custAgyOptsEl.classList.toggle('open', isAgy);
+      if (isAgy) {
+        custModelEl.setAttribute('list', 'agyModelList');
+        custEffortEl.setAttribute('list', 'agyEffortList');
+      } else {
+        custModelEl.removeAttribute('list');
+        custEffortEl.removeAttribute('list');
+      }
+    }
+
+    function readPickerAgyOptions() {
+      const def = state.agyDefaults || {};
+      const modeVal = document.getElementById('agyPickMode').value;
+      const agentVal = document.getElementById('agyPickAgent').value.trim();
+      const sbVal = Boolean(document.getElementById('agyPickSandbox').checked);
+      const nsVal = Boolean(document.getElementById('agyPickNoSlash').checked);
+      const out = {};
+      if (modeVal !== (def.permissionMode || 'default') || (modeVal && modeVal !== 'default')) {
+        out.permissionMode = modeVal;
+      }
+      if (sbVal !== Boolean(def.sandbox) || sbVal) {
+        out.sandbox = sbVal;
+      }
+      if (nsVal !== Boolean(def.disableSlashCommands) || nsVal) {
+        out.disableSlashCommands = nsVal;
+      }
+      if (agentVal !== (def.agent || '') || agentVal) {
+        out.agent = agentVal;
+      }
+      return normalizeAgyOptsClient(out);
     }
 
     function effectivePaneMode(c) {
@@ -493,18 +716,31 @@ function renderArenaHtml(webview) {
       renderDrawerVisibility();
     });
 
-    document.getElementById('custHarness').addEventListener('change', (e) => {
-      document.getElementById('custTpl').style.display = e.target.value === 'custom' ? 'inline-block' : 'none';
-    });
+    custHarnessEl.addEventListener('change', syncCustomAgyUi);
 
     document.getElementById('btnAddCustom').addEventListener('click', () => {
-      const harness = document.getElementById('custHarness').value;
-      const model = document.getElementById('custModel').value.trim();
-      const effort = document.getElementById('custEffort').value.trim();
+      const harness = custHarnessEl.value;
+      const model = custModelEl.value.trim();
+      const effort = custEffortEl.value.trim();
       const argsRaw = document.getElementById('custArgs').value.trim();
       const extraArgs = argsRaw ? argsRaw.split(/\\s+/) : [];
       const commandTemplate = document.getElementById('custTpl').value.trim();
-      const item = { harness, model, effort, extraArgs, commandTemplate };
+      let agyOptions = null;
+      if (harness === 'agy') {
+        const cm = document.getElementById('custAgyMode').value;
+        const ca = document.getElementById('custAgyAgent').value.trim();
+        const csb = document.getElementById('custAgySandbox').checked;
+        const cns = document.getElementById('custAgyNoSlash').checked;
+        const cst = document.getElementById('custAgySettings').value.trim();
+        agyOptions = normalizeAgyOptsClient({
+          permissionMode: cm,
+          sandbox: csb ? true : null,
+          disableSlashCommands: cns ? true : null,
+          agent: ca,
+          settings: cst,
+        });
+      }
+      const item = { harness, model, effort, extraArgs, commandTemplate, agyOptions };
       item.label = configKeyOf(item);
       if (state.activeTask) {
         pendingAddAgents.push(item);
@@ -512,8 +748,77 @@ function renderArenaHtml(webview) {
         renderDrawerVisibility();
         renderAddModeHeader();
         renderPresetBar();
+        renderAgyPicker();
       } else {
         draftAgents.push(item);
+        renderAll();
+      }
+    });
+
+    agySearchInput.addEventListener('input', () => {
+      agySearchQuery = agySearchInput.value.trim().toLowerCase();
+      renderAgyPicker();
+    });
+
+    document.getElementById('btnRefreshAgyCatalog').addEventListener('click', () => {
+      if (!state.agyCatalog) state.agyCatalog = { models: [], agents: [], loading: true, fetchedAt: 0, error: null };
+      state.agyCatalog.loading = true;
+      renderAgyPicker();
+      vscode.postMessage({ type: 'refreshAgyCatalog' });
+    });
+
+    document.getElementById('btnCloseAgyPicker').addEventListener('click', () => {
+      agyPickerOpen = false;
+      renderAgyPicker();
+    });
+
+    ['agyPickEffort', 'agyPickMode', 'agyPickSandbox', 'agyPickNoSlash', 'agyPickAgent'].forEach((id) => {
+      document.getElementById(id).addEventListener('change', () => {
+        renderAgyPicker();
+      });
+    });
+
+    agyGroupPills.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-agy-group]');
+      if (!btn) return;
+      agyGroupFilter = btn.getAttribute('data-agy-group') || '';
+      renderAgyPicker();
+    });
+
+    agyModelsGrid.addEventListener('click', (e) => {
+      const card = e.target.closest('button[data-agy-model-id]');
+      if (!card) return;
+      const modelId = card.getAttribute('data-agy-model-id');
+      const modelObj = ((state.agyCatalog && state.agyCatalog.models) || []).find((m) => m.id === modelId);
+      const effort = document.getElementById('agyPickEffort').value.trim();
+      const agyOptions = readPickerAgyOptions();
+      const item = {
+        harness: 'agy',
+        model: modelId,
+        effort,
+        extraArgs: [],
+        commandTemplate: '',
+        agyOptions,
+      };
+      const baseTitle = 'Antigravity · ' + ((modelObj && modelObj.label) || modelId);
+      const suffix = agyOptionsSuffix(agyOptions);
+      item.label = (effort ? (baseTitle + ' (' + effort + ')') : baseTitle) + suffix;
+      const key = configKeyOf(item);
+
+      if (state.activeTask) {
+        const idx = pendingAddAgents.findIndex((c) => configKeyOf(c) === key);
+        if (idx >= 0) pendingAddAgents.splice(idx, 1);
+        else pendingAddAgents.push(item);
+        agentsDrawerOpen = true;
+        renderDrawerVisibility();
+        renderAddModeHeader();
+        renderPresetBar();
+        renderAgyPicker();
+      } else {
+        const idx = draftAgents.findIndex((c) => configKeyOf(c) === key);
+        if (idx >= 0) draftAgents.splice(idx, 1);
+        else draftAgents.push(item);
+        agentsDrawerOpen = true;
         renderAll();
       }
     });
@@ -583,6 +888,7 @@ function renderArenaHtml(webview) {
             effort: c.effort,
             extraArgs: c.extraArgs || [],
             commandTemplate: c.commandTemplate || '',
+            agyOptions: c.agyOptions || null,
           }))
         : draftAgents;
       if (!configs.length) {
@@ -718,6 +1024,68 @@ function renderArenaHtml(webview) {
       }
     }
 
+    function renderAgyPicker() {
+      const agyInfo = (state.harnesses || {}).agy;
+      if (!agyInfo || !agyInfo.available || !agyPickerOpen) {
+        agyPicker.classList.remove('open');
+        return;
+      }
+      agyPicker.classList.add('open');
+
+      const cat = state.agyCatalog || { models: [], agents: [], loading: false, error: null };
+      const models = Array.isArray(cat.models) ? cat.models : [];
+      const groups = Array.from(new Set(models.map((m) => m.group).filter(Boolean)));
+      if (agyGroupFilter && !groups.includes(agyGroupFilter)) {
+        agyGroupFilter = '';
+      }
+
+      agyGroupPills.innerHTML =
+        '<button class="mini-btn' + (!agyGroupFilter ? ' active' : '') + '" data-agy-group="">All (' + models.length + ')</button>' +
+        groups.map((g) =>
+          '<button class="mini-btn' + (agyGroupFilter === g ? ' active' : '') + '" data-agy-group="' + esc(g) + '">' + esc(g) + '</button>'
+        ).join('');
+
+      if (cat.loading && !models.length) {
+        agyModelsGrid.innerHTML = '<div class="muted" style="padding:6px 2px;">Fetching available Antigravity models…</div>';
+        return;
+      }
+      if (cat.error && !models.length) {
+        agyModelsGrid.innerHTML = '<div class="muted" style="color:var(--aa-err-fg);padding:6px 2px;">' + esc(cat.error) + '</div>';
+        return;
+      }
+
+      const inAddMode = Boolean(state.activeTask);
+      const activeList = inAddMode ? pendingAddAgents : draftAgents;
+      const effort = document.getElementById('agyPickEffort').value.trim();
+      const agyOpts = readPickerAgyOptions();
+      const selectedKeys = new Set(activeList.map((c) => configKeyOf(c)));
+      const existingKeys = new Set(inAddMode ? (state.activeTask.candidates || []).map((c) => configKeyOf(c)) : []);
+
+      const filtered = models.filter((m) => {
+        if (agyGroupFilter && m.group !== agyGroupFilter) return false;
+        if (agySearchQuery) {
+          const hay = (m.id + ' ' + (m.label || '')).toLowerCase();
+          if (!hay.includes(agySearchQuery)) return false;
+        }
+        return true;
+      });
+
+      if (!filtered.length) {
+        agyModelsGrid.innerHTML = '<div class="muted" style="padding:6px 2px;">No matching Antigravity models found.</div>';
+        return;
+      }
+
+      agyModelsGrid.innerHTML = filtered.map((m) => {
+        const probeKey = configKeyOf({ harness: 'agy', model: m.id, effort, agyOptions: agyOpts });
+        const sel = selectedKeys.has(probeKey);
+        const inTask = inAddMode && existingKeys.has(probeKey);
+        return '<button class="agy-model-card' + (sel ? ' selected' : '') + '" data-agy-model-id="' + esc(m.id) + '" title="' + esc('Toggle ' + probeKey) + '">' +
+          '<span><strong>' + esc(m.label || m.id) + '</strong>' + (inTask ? ' <span class="muted">✓</span>' : '') + '</span>' +
+          '<span class="agy-model-id">' + esc(m.id) + '</span>' +
+        '</button>';
+      }).join('');
+    }
+
     function renderPresetBar() {
       const inAddMode = Boolean(state.activeTask);
       const activeList = inAddMode ? pendingAddAgents : draftAgents;
@@ -741,16 +1109,34 @@ function renderArenaHtml(webview) {
       activeList.forEach((c, aIdx) => {
         const key = configKeyOf(c);
         if (!presetKeys.has(key)) {
-          chips.push('<button class="preset-chip selected" data-extra-idx="' + aIdx + '" title="Remove custom agent">' +
+          chips.push('<button class="preset-chip selected" data-extra-idx="' + aIdx + '" title="Remove agent configuration">' +
             esc(c.label || key) + ' ×</button>');
         }
       });
+      const agyInfo = (state.harnesses || {}).agy;
+      if (agyInfo && agyInfo.available) {
+        const agyModels = (state.agyCatalog && state.agyCatalog.models) || [];
+        const agyCountLbl = (state.agyCatalog && state.agyCatalog.loading && !agyModels.length)
+          ? '…'
+          : String(agyModels.length);
+        chips.push('<button class="preset-chip' + (agyPickerOpen ? ' selected' : '') + '" id="btnToggleAgyPicker" title="Browse all Antigravity models &amp; settings">✦ Antigravity Models (' + agyCountLbl + ') ' + (agyPickerOpen ? '▴' : '▾') + '</button>');
+      }
       chips.push('<button class="preset-chip" id="btnToggleCustom">+ Custom</button>');
       presetBar.innerHTML = chips.join('');
     }
 
     presetBar.addEventListener('click', (e) => {
+      if (e.target.closest('#btnToggleAgyPicker')) {
+        agyPickerOpen = !agyPickerOpen;
+        if (agyPickerOpen && (!state.agyCatalog || (!state.agyCatalog.fetchedAt && !state.agyCatalog.loading))) {
+          vscode.postMessage({ type: 'refreshAgyCatalog' });
+        }
+        renderPresetBar();
+        renderAgyPicker();
+        return;
+      }
       if (e.target.closest('#btnToggleCustom')) {
+        syncCustomAgyUi();
         document.getElementById('customDrawer').classList.toggle('open');
         return;
       }
@@ -761,6 +1147,7 @@ function renderArenaHtml(webview) {
           pendingAddAgents.splice(eIdx, 1);
           renderAddModeHeader();
           renderPresetBar();
+          renderAgyPicker();
         } else {
           draftAgents.splice(eIdx, 1);
           renderAll();
@@ -781,6 +1168,7 @@ function renderArenaHtml(webview) {
         renderDrawerVisibility();
         renderAddModeHeader();
         renderPresetBar();
+        renderAgyPicker();
       } else {
         const found = draftAgents.findIndex((c) => configKeyOf(c) === key);
         if (found >= 0) draftAgents.splice(found, 1);
@@ -1205,9 +1593,12 @@ function renderArenaHtml(webview) {
     });
 
     function renderAll() {
+      syncAgyDatalists();
+      syncCustomAgyUi();
       renderTopControls();
       renderAddModeHeader();
       renderPresetBar();
+      renderAgyPicker();
       renderTutorialBanner();
       renderColumns();
     }
@@ -1218,6 +1609,14 @@ function renderArenaHtml(webview) {
       if (msg.type === 'state') {
         const prevMode = isolationSelect.value;
         state = msg.payload || state;
+        if (!agyPickerInitialized && state.agyDefaults) {
+          agyPickerInitialized = true;
+          const d = state.agyDefaults;
+          document.getElementById('agyPickMode').value = d.permissionMode || 'default';
+          document.getElementById('agyPickAgent').value = d.agent || '';
+          document.getElementById('agyPickSandbox').checked = Boolean(d.sandbox);
+          document.getElementById('agyPickNoSlash').checked = Boolean(d.disableSlashCommands);
+        }
         if (state.openAddDrawer) {
           agentsDrawerOpen = true;
         }
