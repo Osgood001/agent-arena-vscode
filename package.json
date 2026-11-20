@@ -2,7 +2,7 @@
   "name": "agent-arena",
   "displayName": "Agent Arena",
   "description": "Run multiple AI coding harnesses, models, and reasoning efforts side-by-side in VS Code, and analyze token usage, elapsed time, diffs, and blind outcomes.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "Osgood001",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -239,6 +239,53 @@
           "type": "boolean",
           "default": true,
           "description": "Pass --auto to OpenCode non-interactive runs."
+        },
+        "agentArena.judge.harness": {
+          "type": "string",
+          "enum": [
+            "",
+            "codex",
+            "claude",
+            "opencode",
+            "pi",
+            "dsh",
+            "custom"
+          ],
+          "default": "",
+          "description": "Coding agent harness assigned to judge runs. Empty = auto-select first available CLI."
+        },
+        "agentArena.judge.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model name for the judge agent. Empty = use that CLI's configured default model."
+        },
+        "agentArena.judge.effort": {
+          "type": "string",
+          "default": "medium",
+          "description": "Reasoning effort passed to the judge agent when supported (e.g. low, medium, high)."
+        },
+        "agentArena.judge.blind": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mask candidate identities as Candidate A/B/C in randomized order when judging."
+        },
+        "agentArena.judge.rubric": {
+          "type": "string",
+          "default": "",
+          "description": "Optional custom evaluation rubric appended to the AI judge prompt."
+        },
+        "agentArena.judge.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional CLI flags passed to the AI judge process."
+        },
+        "agentArena.judge.commandTemplate": {
+          "type": "string",
+          "default": "",
+          "description": "Custom shell command template when agentArena.judge.harness is set to custom ({prompt_file}, {cwd}, {model}, {effort})."
         }
       }
     }

@@ -2,6 +2,13 @@
 
 All notable changes to **Agent Arena** are documented in this file.
 
+## [0.4.0] - 2026-11-20
+
+### Added
+- **Minimalist, Output-First UI with Progressive Disclosure**: Streamlined the Side-by-Side Arena, Run Summary, and Leaderboard around uncluttered high-signal views, auto-collapsing the agent preset drawer once launched, hiding empty file footers, and placing full 12-column telemetry, 95% confidence interval tables, plots, pairwise matrices, and workspace diffs inside collapsible on-demand disclosures.
+- **Rendered Markdown Outputs & `.md` File Switching (`lib/markdown.js`)**: Zero-dependency, XSS-safe GFM Markdown renderer for headings, tables with alignment, fenced code blocks, task lists, nested lists, blockquotes, inline formatting, and sanitized `https`/`http`/`mailto` links. Supports toggling rendered Markdown vs. raw source and previewing `.md` files produced by candidates directly inside both Arena panes and Analysis cards.
+- **Configurable Coding Agent Judge (`lib/judge.js`, `agentArena.judge.*`)**: Assign any coding agent CLI (`codex`, `claude`, `opencode`, `pi`, `dsh`, or `custom`) with configurable model, reasoning effort, blind candidate masking (`Candidate A/B/C`), and custom evaluation rubric to judge outputs and persist structured scores and rationale automatically (`judgeType: 'agent'`, CSV `judge_type` column).
+
 ## [0.3.0] - 2026-11-20
 
 ### Added

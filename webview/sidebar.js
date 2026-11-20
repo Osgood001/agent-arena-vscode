@@ -154,11 +154,12 @@ function renderSidebarHtml(webview) {
         }
         let winnerHtml = '';
         if (t.judgment) {
+          const icon = t.judgment.judgeType === 'agent' ? '⚡ ' : '★ ';
           if (t.judgment.isTie) {
-            winnerHtml = '<span class="badge winner">Tie</span>';
+            winnerHtml = '<span class="badge winner">' + icon + 'Tie</span>';
           } else if (t.judgment.winnerId) {
             const wc = cands.find((c) => c.id === t.judgment.winnerId);
-            if (wc) winnerHtml = '<span class="badge winner">★ ' + esc(wc.label) + '</span>';
+            if (wc) winnerHtml = '<span class="badge winner">' + icon + esc(wc.label) + '</span>';
           }
         }
         return '<div class="task-item">' +

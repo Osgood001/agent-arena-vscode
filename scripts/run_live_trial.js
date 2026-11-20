@@ -9,6 +9,7 @@ const EXT_ROOT = path.resolve(__dirname, '..');
 const store = require(path.join(EXT_ROOT, 'lib/store'));
 const harnesses = require(path.join(EXT_ROOT, 'lib/harnesses'));
 const isolator = require(path.join(EXT_ROOT, 'lib/isolator'));
+const judge = require(path.join(EXT_ROOT, 'lib/judge'));
 
 function parseArgs(argv) {
   const opts = {
@@ -17,23 +18,23 @@ function parseArgs(argv) {
     title: 'Live Welcome Tutorial',
     tags: ['tutorial', 'smoke-test'],
     prompt:
-      'Inspect the workspace/ directory of this VS Code extension and summarize its core modules plus one concrete improvement in 5 short bullet points. Do not edit any existing files.',
+      'Inspect the workspace/ directory of this VS Code extension and reply in clean Markdown with a short ## Architecture Overview heading, a Markdown table of core modules (Module | Role), and 3 concise bullets including one concrete improvement. Do not modify any files.',
     timeoutMinutes: 8,
     saveSampleJudgment: false,
+    runAiJudge: false,
+    judgeHarness: 'codex',
+    judgeEffort: 'low',
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
-    if (a === '--workspace' && argv[i + 1]) {
-      opts.workspace = path.resolve(argv[++i]);
-    } else if (a === '--mode' && argv[i + 1]) {
-      opts.mode = argv[++i];
-    } else if (a === '--title' && argv[i + 1]) {
-      opts.title = argv[++i];
-    } else if (a === '--prompt' && argv[i + 1]) {
-      opts.prompt = argv[++i];
-    } else if (a === '--judge') {
-      opts.saveSampleJudgment = true;
-    }
+    if (a === '--workspace' && argv[i + 1]) opts.workspace = path.resolve(argv[++i]);
+    else if (a === '--mode' && argv[i + 1]) opts.mode = argv[++i];
+    else if (a === '--title' && argv[i + 1]) opts.title = argv[++i];
+    else if (a === '--prompt' && argv[i + 1]) opts.prompt = argv[++i];
+    else if (a === '--judge') opts.saveSampleJudgment = true;
+    else if (a === '--ai-judge') opts.runAiJudge = true;
+    else if (a === '--judge-harness' && argv[i + 1]) opts.judgeHarness = argv[++i];
+    else if (a === '--judge-effort' && argv[i + 1]) opts.judgeEffort = argv[++i];
   }
   return opts;
 }
@@ -118,7 +119,28 @@ async function main() {
   task.finishedAt = new Date().toISOString();
   store.saveTask(opts.workspace, task);
 
-  if (opts.saveSampleJudgment) {
+  if (opts.runAiJudge) {
+    console.log(`[judge] starting AI judge (${opts.judgeHarness} / ${opts.judgeEffort || 'default'} / blind)...`);
+    const jHandle = judge.runAgentJudge(
+      opts.workspace,
+      task,
+      {
+        harness: opts.judgeHarness,
+        effort: opts.judgeEffort,
+        blind: true,
+      },
+      {
+        detectedHarnesses: detected,
+        timeoutMinutes: 5,
+      },
+    );
+    const jRes = await jHandle.promise;
+    const saved = store.saveJudgment(opts.workspace, task.id, jRes.judgmentInput);
+    const winCand = saved.candidates.find((c) => c.id === saved.judgment.winnerId);
+    console.log(
+      `[judge] done in ${(jRes.durationMs / 1000).toFixed(1)}s -> judge=${jRes.judgeConfig.label} winner=${winCand ? winCand.label : (saved.judgment.isTie ? 'TIE' : 'none')}`,
+    );
+  } else if (opts.saveSampleJudgment) {
     const sorted = [...task.candidates].sort((a, b) => (b.finalText || '').length - (a.finalText || '').length);
     const scores = {};
     task.candidates.forEach((c) => {

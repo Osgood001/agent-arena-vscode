@@ -26,31 +26,38 @@ function renderArenaHtml(webview) {
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      padding: 8px 12px;
+      padding: 8px 14px;
       border-bottom: 1px solid var(--aa-border);
       background: var(--aa-card);
     }
     .topbar-left, .topbar-right {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
       flex-wrap: wrap;
     }
+    .brand { font-weight: 700; font-size: 13.5px; letter-spacing: -0.01em; margin-right: 2px; }
+    .drawer-wrap {
+      display: none;
+      flex-direction: column;
+      gap: 7px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--aa-border);
+      background: var(--aa-subtle);
+    }
+    .drawer-wrap.open { display: flex; }
     .preset-bar {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 6px;
-      padding: 7px 12px;
-      border-bottom: 1px solid var(--aa-border);
-      background: rgba(127, 127, 127, 0.04);
     }
     .preset-chip {
       font-size: 11.5px;
       padding: 3px 9px;
       border-radius: 999px;
       border: 1px solid var(--aa-border);
-      background: transparent;
+      background: var(--aa-bg);
       color: var(--aa-fg);
       cursor: pointer;
       display: inline-flex;
@@ -58,121 +65,168 @@ function renderArenaHtml(webview) {
       gap: 5px;
     }
     .preset-chip.selected {
-      background: rgba(42, 140, 130, 0.18);
+      background: rgba(42, 140, 130, 0.16);
       border-color: var(--aa-teal);
       font-weight: 600;
     }
     .preset-chip.unavailable { opacity: 0.45; }
     .custom-drawer {
       display: none;
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--aa-border);
-      background: var(--aa-card);
       gap: 6px;
       flex-wrap: wrap;
       align-items: center;
+      padding-top: 4px;
     }
     .custom-drawer.open { display: flex; }
+    .tutorial-strip {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 6px 14px;
+      border-bottom: 1px solid rgba(42, 140, 130, 0.35);
+      background: rgba(42, 140, 130, 0.08);
+      font-size: 12px;
+    }
+    .tutorial-strip.open { display: flex; }
+    .tut-steps-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .tut-pill {
+      padding: 1px 7px;
+      border-radius: 999px;
+      border: 1px solid var(--aa-border);
+      background: var(--aa-bg);
+      font-size: 11px;
+      color: var(--aa-muted);
+    }
+    .tut-pill.active {
+      border-color: var(--aa-teal);
+      color: var(--aa-fg);
+      font-weight: 600;
+    }
+    .tut-pill.done {
+      border-color: rgba(63, 185, 80, 0.45);
+      color: var(--aa-ok-fg);
+    }
     .columns-wrap {
       flex: 1 1 auto;
       min-height: 0;
       display: flex;
-      gap: 10px;
-      padding: 10px 12px;
+      gap: 12px;
+      padding: 12px 14px;
       overflow-x: auto;
       overflow-y: hidden;
     }
     .pane {
-      flex: 1 1 320px;
+      flex: 1 1 340px;
       min-width: 310px;
       height: 100%;
       display: flex;
       flex-direction: column;
       border: 1px solid var(--aa-border);
-      border-radius: 6px;
+      border-radius: 8px;
       background: var(--aa-card);
       overflow: hidden;
     }
     .pane-head {
-      padding: 8px 10px;
-      border-bottom: 1px solid var(--aa-border);
+      padding: 10px 12px 7px;
       display: flex;
       flex-direction: column;
-      gap: 5px;
-      background: rgba(127, 127, 127, 0.05);
+      gap: 3px;
     }
     .pane-title-row {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
-      gap: 6px;
+      align-items: center;
+      gap: 8px;
     }
     .pane-name { font-weight: 700; font-size: 13px; word-break: break-word; }
-    .pane-sub { font-size: 11px; color: var(--aa-muted); }
-    .pane-status-row {
+    .pane-head-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .pane-meta-line {
+      font-size: 11.5px;
+      color: var(--aa-muted);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 6px;
-      font-size: 11.5px;
+      gap: 8px;
     }
-    .pane-metrics {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 4px;
-      padding: 5px 10px;
-      border-bottom: 1px solid var(--aa-border);
-      font-size: 11px;
-      background: rgba(127, 127, 127, 0.02);
-    }
-    .metric-cell {
-      display: flex;
-      flex-direction: column;
-    }
-    .metric-label { font-size: 10px; color: var(--aa-muted); }
-    .metric-val { font-weight: 600; font-family: var(--vscode-editor-font-family, monospace); }
     .pane-tabs {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 4px;
-      padding: 4px 10px;
+      gap: 6px;
+      padding: 5px 12px 7px;
       border-bottom: 1px solid var(--aa-border);
-      font-size: 11px;
+      font-size: 11.5px;
       flex-wrap: wrap;
     }
-    .pane-tab-group, .pane-filters {
+    .pane-tab-left {
       display: inline-flex;
-      gap: 3px;
       align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
     }
-    .pane-tab, .pane-filter {
+    .md-file-pill {
+      font-size: 11px;
       padding: 2px 7px;
-      border-radius: 3px;
+      border-radius: 5px;
+      border: 1px solid var(--aa-border);
+      background: transparent;
+      color: var(--aa-muted);
+      font-family: var(--vscode-editor-font-family, monospace);
+    }
+    .md-file-pill.active {
+      border-color: var(--aa-teal);
+      color: var(--aa-fg);
+      background: rgba(42, 140, 130, 0.14);
+      font-weight: 600;
+    }
+    .pane-tab-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .mini-btn {
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 5px;
       border: 1px solid transparent;
       background: transparent;
-      font-size: 11px;
+      color: var(--aa-muted);
     }
-    .pane-tab.active, .pane-filter.active {
+    .mini-btn:hover { background: var(--aa-subtle); color: var(--aa-fg); }
+    .mini-btn.active {
       border-color: var(--aa-border);
-      background: rgba(127, 127, 127, 0.16);
+      background: var(--aa-bg);
+      color: var(--aa-fg);
       font-weight: 600;
     }
     .pane-body {
       flex: 1 1 auto;
       min-height: 0;
       overflow-y: auto;
-      padding: 8px 10px;
-      font-size: 12px;
+      padding: 12px 13px;
+      font-size: 12.5px;
     }
     .feed-item {
       margin-bottom: 7px;
-      padding: 5px 7px;
-      border-radius: 4px;
-      border-left: 3px solid var(--aa-border);
-      background: rgba(127, 127, 127, 0.06);
+      padding: 5px 8px;
+      border-radius: 5px;
+      border-left: 2.5px solid var(--aa-border);
+      background: var(--aa-subtle);
       white-space: pre-wrap;
       word-break: break-word;
+      font-size: 12px;
     }
     .feed-item.assistant { border-left-color: var(--aa-teal); }
     .feed-item.tool {
@@ -203,9 +257,9 @@ function renderArenaHtml(webview) {
       background: rgba(42, 140, 130, 0.12);
     }
     .feed-kind {
-      font-size: 10px;
+      font-size: 9.5px;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
       color: var(--aa-muted);
       margin-bottom: 2px;
       display: block;
@@ -214,31 +268,32 @@ function renderArenaHtml(webview) {
       white-space: pre-wrap;
       word-break: break-word;
       font-family: var(--vscode-editor-font-family, monospace);
-      font-size: 11px;
+      font-size: 11.5px;
       margin: 0;
+      line-height: 1.5;
     }
     .pane-foot {
-      padding: 6px 10px;
+      padding: 7px 12px;
       border-top: 1px solid var(--aa-border);
       display: flex;
       flex-direction: column;
       gap: 5px;
-      background: rgba(127, 127, 127, 0.04);
+      background: var(--aa-subtle);
       font-size: 11px;
     }
     .file-chips {
       display: flex;
       flex-wrap: wrap;
       gap: 4px;
-      max-height: 58px;
+      max-height: 54px;
       overflow-y: auto;
     }
     .file-chip {
       font-size: 10.5px;
       padding: 1px 6px;
-      border-radius: 3px;
+      border-radius: 4px;
       border: 1px solid var(--aa-border);
-      background: rgba(127, 127, 127, 0.1);
+      background: var(--aa-bg);
       font-family: var(--vscode-editor-font-family, monospace);
     }
     .file-chip .tag-A { color: var(--aa-ok-fg); font-weight: 700; }
@@ -247,7 +302,7 @@ function renderArenaHtml(webview) {
     .composer {
       border-top: 1px solid var(--aa-border);
       background: var(--aa-card);
-      padding: 9px 12px;
+      padding: 10px 14px;
       display: flex;
       flex-direction: column;
       gap: 7px;
@@ -255,12 +310,13 @@ function renderArenaHtml(webview) {
     .composer-row {
       display: flex;
       gap: 8px;
-      align-items: flex-end;
+      align-items: stretch;
     }
     .composer textarea {
       flex: 1 1 auto;
-      min-height: 54px;
-      max-height: 160px;
+      min-height: 48px;
+      max-height: 150px;
+      padding: 7px 10px;
     }
     .composer-meta {
       display: flex;
@@ -270,114 +326,82 @@ function renderArenaHtml(webview) {
       justify-content: space-between;
       font-size: 11.5px;
     }
-    .composer-inputs {
+    .composer-left {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: 8px;
       align-items: center;
     }
-    .tutorial-banner {
+    .extra-opts {
       display: none;
-      margin: 8px 12px 0;
-      padding: 10px 12px;
-      border-radius: 6px;
-      border: 1px solid rgba(42, 140, 130, 0.55);
-      background: rgba(42, 140, 130, 0.08);
-      gap: 8px;
-      flex-direction: column;
-    }
-    .tutorial-banner.open { display: flex; }
-    .tutorial-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
       gap: 8px;
       flex-wrap: wrap;
+      align-items: center;
     }
-    .tutorial-steps {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(150px, 1fr));
-      gap: 6px;
-    }
-    .t-step {
-      border: 1px solid var(--aa-border);
-      border-radius: 5px;
-      padding: 6px 8px;
-      background: var(--aa-card);
-      font-size: 11.5px;
-    }
-    .t-step.active {
-      border-color: var(--aa-teal);
-      box-shadow: 0 0 0 1px rgba(42, 140, 130, 0.35);
-    }
-    .t-step.done {
-      border-color: rgba(63, 185, 80, 0.6);
-      background: rgba(63, 185, 80, 0.08);
-    }
-    .t-step-title { font-weight: 700; font-size: 11.5px; margin-bottom: 2px; }
+    .extra-opts.open { display: flex; }
   </style>
 </head>
 <body>
   <div class="topbar">
     <div class="topbar-left">
-      <strong>Agent Arena</strong>
-      <select id="taskSelect" title="Select active or historical task"></select>
-      <button id="btnNewDraft" title="Clear and compose a fresh side-by-side run">+ New Run</button>
-      <button id="btnRerunTask" title="Re-run this task with the same prompt and agent columns" disabled>↻ Re-run</button>
+      <span class="brand">Agent Arena</span>
+      <select id="taskSelect" title="Select active or historical run"></select>
+      <button id="btnNewDraft" title="Compose a fresh side-by-side run">+ New</button>
+      <button id="btnAgentsDrawer" title="Toggle agent presets &amp; custom columns">Agents (0)</button>
+      <button id="btnRerunTask" title="Re-run this prompt and agent columns" style="display:none;">↻ Re-run</button>
       <span id="sinceBadge" class="muted" style="font-size:11.5px;"></span>
     </div>
     <div class="topbar-right">
-      <button id="btnStopAll" class="danger" disabled>Stop All</button>
-      <button id="btnSettings" title="Configure Agent Arena settings (permission &amp; sandbox modes)">Settings ⚙</button>
-      <button id="btnOpenAnalysis">Open Analysis &amp; Telemetry ↗</button>
+      <button id="btnStopAll" class="danger" style="display:none;">Stop All</button>
+      <button id="btnOpenAnalysis">Analysis &amp; Leaderboard ↗</button>
+      <button id="btnSettings" class="ghost" title="Configure Agent Arena settings">⚙</button>
     </div>
   </div>
 
-  <div id="presetBar" class="preset-bar"></div>
-
-  <div id="customDrawer" class="custom-drawer">
-    <select id="custHarness">
-      <option value="codex">codex</option>
-      <option value="claude">claude</option>
-      <option value="opencode">opencode</option>
-      <option value="pi">pi</option>
-      <option value="dsh">dsh</option>
-      <option value="custom">custom shell</option>
-    </select>
-    <input id="custModel" type="text" placeholder="Model (optional, e.g. sonnet, o3, deepseek-chat)" style="width:225px;" />
-    <input id="custEffort" type="text" placeholder="Effort (low/medium/high/xhigh)" style="width:165px;" />
-    <input id="custArgs" type="text" placeholder="Extra args (optional)" style="width:150px;" />
-    <input id="custTpl" type="text" placeholder="Custom cmd template ({prompt_file}, {cwd})" style="width:240px;display:none;" />
-    <button id="btnAddCustom" class="primary">Add Column</button>
-    <button id="btnCloseCustom">Close</button>
+  <div id="agentsDrawer" class="drawer-wrap">
+    <div id="presetBar" class="preset-bar"></div>
+    <div id="customDrawer" class="custom-drawer">
+      <select id="custHarness">
+        <option value="codex">codex</option>
+        <option value="claude">claude</option>
+        <option value="opencode">opencode</option>
+        <option value="pi">pi</option>
+        <option value="dsh">dsh</option>
+        <option value="custom">custom shell</option>
+      </select>
+      <input id="custModel" type="text" placeholder="Model (optional, e.g. sonnet, o3, deepseek-chat)" style="width:225px;" />
+      <input id="custEffort" type="text" placeholder="Effort (low/medium/high)" style="width:145px;" />
+      <input id="custArgs" type="text" placeholder="Extra args" style="width:120px;" />
+      <input id="custTpl" type="text" placeholder="Custom cmd template ({prompt_file}, {cwd})" style="width:230px;display:none;" />
+      <button id="btnAddCustom" class="primary">Add</button>
+      <button id="btnCloseCustom" class="ghost">Close</button>
+    </div>
   </div>
 
-  <div id="tutorialBanner" class="tutorial-banner"></div>
+  <div id="tutorialBanner" class="tutorial-strip"></div>
 
   <div id="columnsWrap" class="columns-wrap"></div>
 
   <div class="composer">
     <div class="composer-row">
-      <textarea id="promptInput" placeholder="Enter one shared prompt to launch all selected agents concurrently side-by-side… (Cmd+Enter to run)"></textarea>
-      <div style="display:flex;flex-direction:column;gap:5px;min-width:190px;">
-        <button id="btnLaunch" class="primary" style="justify-content:center;padding:9px 14px;">Launch All Concurrently</button>
-        <div id="isolationHint" class="muted" style="font-size:10.5px;text-align:center;"></div>
-      </div>
+      <textarea id="promptInput" placeholder="One shared prompt for all selected agents… (⌘Enter / Ctrl+Enter to run)"></textarea>
+      <button id="btnLaunch" class="primary" style="min-width:110px;justify-content:center;padding:8px 16px;">Run ⌘↵</button>
     </div>
     <div class="composer-meta">
-      <div class="composer-inputs">
-        <label>Title <input id="titleInput" type="text" placeholder="Optional run title" style="width:180px;" /></label>
-        <label>Tags <input id="tagsInput" type="text" placeholder="e.g. paper, refactor" style="width:140px;" /></label>
-        <label>Isolation
-          <select id="isolationSelect">
-            <option value="direct">Direct (Shared Workspace)</option>
-            <option value="scratch">Isolated Scratch Folder (Instant)</option>
-            <option value="apfs-cow">Isolated (CoW Clone)</option>
-            <option value="git-worktree">Isolated (Git Worktree)</option>
-          </select>
-        </label>
+      <div class="composer-left">
+        <select id="isolationSelect" title="Workspace isolation mode">
+          <option value="direct">Direct (Shared Workspace)</option>
+          <option value="scratch">Scratch Folder (Isolated)</option>
+          <option value="apfs-cow">CoW Clone (Isolated)</option>
+          <option value="git-worktree">Git Worktree (Isolated)</option>
+        </select>
+        <button id="btnToggleOptions" class="ghost" style="padding:2px 7px;font-size:11.5px;">Options ▾</button>
+        <div id="extraOpts" class="extra-opts">
+          <input id="titleInput" type="text" placeholder="Run title" style="width:165px;" />
+          <input id="tagsInput" type="text" placeholder="Tags (comma separated)" style="width:155px;" />
+        </div>
       </div>
-      <div class="muted" id="composerStatus">Select agents above, write prompt, launch concurrently.</div>
+      <div class="muted" id="composerStatus">Ready.</div>
     </div>
   </div>
 
@@ -397,21 +421,27 @@ function renderArenaHtml(webview) {
       tutorial: { visible: false, taskId: null, completed: false },
     };
     let draftAgents = [];
-    let paneModes = {};   // candId -> 'feed' | 'raw' | 'final'
-    let paneFilters = {}; // candId -> 'all' | 'tools' | 'errors'
-    let rawCache = {};    // candId -> string
+    let paneModes = {};     // candId -> 'output' | 'activity' | 'raw' | 'file:<relPath>'
+    let paneFilters = {};   // candId -> 'all' | 'tools' | 'errors'
+    let paneRawText = {};   // candId -> boolean (true = show unrendered markdown source in Output/File)
+    let rawCache = {};      // candId -> string
+    let fileCache = {};     // taskId::candId::relPath -> { text, error }
+    let agentsDrawerOpen = null; // null = auto (open in draft, collapsed in active run)
     let isLaunching = false;
-    const TUTORIAL_PROMPT = 'Inspect the current workspace top-level files and summarize in 5 concise bullet points what this repository/workspace contains and how its main workflow is structured. Do not edit any existing files.';
+    const TUTORIAL_PROMPT = 'Inspect the current workspace top-level files and summarize in 5 concise bullet points plus a small Markdown table what this project contains and how it is structured. Do not edit any existing files.';
 
     const taskSelect = document.getElementById('taskSelect');
+    const agentsDrawer = document.getElementById('agentsDrawer');
+    const btnAgentsDrawer = document.getElementById('btnAgentsDrawer');
     const presetBar = document.getElementById('presetBar');
     const tutorialBanner = document.getElementById('tutorialBanner');
     const columnsWrap = document.getElementById('columnsWrap');
     const promptInput = document.getElementById('promptInput');
     const titleInput = document.getElementById('titleInput');
     const tagsInput = document.getElementById('tagsInput');
+    const extraOpts = document.getElementById('extraOpts');
+    const btnToggleOptions = document.getElementById('btnToggleOptions');
     const isolationSelect = document.getElementById('isolationSelect');
-    const isolationHint = document.getElementById('isolationHint');
     const btnLaunch = document.getElementById('btnLaunch');
     const btnRerunTask = document.getElementById('btnRerunTask');
     const btnStopAll = document.getElementById('btnStopAll');
@@ -426,19 +456,28 @@ function renderArenaHtml(webview) {
       return e ? (c.harness + ' · ' + m + ' (' + e + ')') : (c.harness + ' · ' + m);
     }
 
-    function updateIsolationHint() {
-      const v = isolationSelect.value;
-      if (v === 'direct') {
-        isolationHint.textContent = 'Shared workspace (no isolation, instant)';
-      } else if (v === 'scratch') {
-        isolationHint.textContent = 'Clean per-agent output folder (instant)';
-      } else if (v === 'git-worktree') {
-        isolationHint.textContent = 'Detached git worktree per agent';
-      } else {
-        isolationHint.textContent = 'CoW clone (heavy dirs symlinked)';
-      }
+    function effectivePaneMode(c) {
+      if (paneModes[c.id]) return paneModes[c.id];
+      if (c.status === 'running' || c.status === 'pending') return 'activity';
+      return 'output';
     }
-    isolationSelect.addEventListener('change', updateIsolationHint);
+
+    function candidateMarkdownFiles(task, cand) {
+      const ch = cand.changedFiles || {};
+      const list = Array.from(new Set([...(ch.added || []), ...(ch.modified || [])]));
+      return list.filter((f) => /\\.(md|markdown)$/i.test(f)).slice(0, 2);
+    }
+
+    btnToggleOptions.addEventListener('click', () => {
+      const open = extraOpts.classList.toggle('open');
+      btnToggleOptions.textContent = open ? 'Options ▴' : 'Options ▾';
+    });
+
+    btnAgentsDrawer.addEventListener('click', () => {
+      const cur = agentsDrawer.classList.contains('open');
+      agentsDrawerOpen = !cur;
+      renderDrawerVisibility();
+    });
 
     document.getElementById('custHarness').addEventListener('change', (e) => {
       document.getElementById('custTpl').style.display = e.target.value === 'custom' ? 'inline-block' : 'none';
@@ -455,7 +494,6 @@ function renderArenaHtml(webview) {
       item.label = configKeyOf(item);
       draftAgents.push(item);
       if (state.activeTask) {
-        // Switching to draft view when customizing columns for a new launch
         state.activeTaskId = null;
         state.activeTask = null;
       }
@@ -469,6 +507,7 @@ function renderArenaHtml(webview) {
     document.getElementById('btnNewDraft').addEventListener('click', () => {
       state.activeTaskId = null;
       state.activeTask = null;
+      agentsDrawerOpen = true;
       btnOpenAnalysis.classList.remove('pulse');
       renderAll();
       promptInput.focus();
@@ -479,8 +518,10 @@ function renderArenaHtml(webview) {
       if (!val) {
         state.activeTaskId = null;
         state.activeTask = null;
+        agentsDrawerOpen = true;
         renderAll();
       } else {
+        agentsDrawerOpen = false;
         vscode.postMessage({ type: 'selectTask', taskId: val });
       }
     });
@@ -525,7 +566,9 @@ function renderArenaHtml(webview) {
           }))
         : draftAgents;
       if (!configs.length) {
-        composerStatus.textContent = 'Select at least one agent configuration above.';
+        agentsDrawerOpen = true;
+        renderDrawerVisibility();
+        composerStatus.textContent = 'Select at least one agent first.';
         return;
       }
       isLaunching = true;
@@ -534,8 +577,9 @@ function renderArenaHtml(webview) {
         isLaunching = false;
         btnLaunch.disabled = false;
       }, 2500);
+      agentsDrawerOpen = false;
       btnOpenAnalysis.classList.remove('pulse');
-      composerStatus.textContent = 'Preparing workspace & launching ' + configs.length + ' agents concurrently…';
+      composerStatus.textContent = 'Launching ' + configs.length + ' agents concurrently…';
       vscode.postMessage({
         type: 'launchTask',
         payload: {
@@ -556,6 +600,13 @@ function renderArenaHtml(webview) {
       }
     });
 
+    function renderDrawerVisibility() {
+      const shouldOpen = agentsDrawerOpen !== null ? agentsDrawerOpen : !state.activeTask;
+      agentsDrawer.classList.toggle('open', shouldOpen);
+      const count = state.activeTask ? (state.activeTask.candidates || []).length : draftAgents.length;
+      btnAgentsDrawer.textContent = 'Agents (' + count + ')' + (shouldOpen ? ' ▴' : ' ▾');
+    }
+
     function renderTopControls() {
       const opts = ['<option value="">+ Compose New Run</option>'];
       for (const t of state.tasks || []) {
@@ -566,27 +617,30 @@ function renderArenaHtml(webview) {
 
       if (state.settingsSummary) {
         btnSettings.title =
-          'Agent Arena Settings (Claude permission: ' +
+          'Settings (Claude: ' +
           (state.settingsSummary.claudePermissionMode || 'acceptEdits') +
-          ' | Codex sandbox: ' +
+          ' | Codex: ' +
           (state.settingsSummary.codexSandboxMode || 'workspace-write') +
           ')';
       }
 
+      renderDrawerVisibility();
+
       if (state.activeTask) {
-        sinceBadge.textContent = 'Created ' + fmtTimeShort(state.activeTask.createdAt) + ' (' + fmtSince(state.activeTask.createdAt) + ') · ' + state.activeTask.isolationMode;
+        sinceBadge.textContent = fmtSince(state.activeTask.createdAt) + ' · ' + state.activeTask.isolationMode;
         const anyRunning = (state.activeTask.candidates || []).some((c) => c.status === 'running' || c.status === 'pending');
-        btnStopAll.disabled = !anyRunning;
-        btnRerunTask.disabled = anyRunning;
+        btnStopAll.style.display = anyRunning ? 'inline-flex' : 'none';
+        btnRerunTask.style.display = anyRunning ? 'none' : 'inline-flex';
         if (!anyRunning && (state.activeTask.candidates || []).length > 0) {
           btnOpenAnalysis.classList.add('pulse');
         } else {
           btnOpenAnalysis.classList.remove('pulse');
         }
       } else {
-        sinceBadge.textContent = 'Draft · ' + draftAgents.length + ' agents selected';
-        btnStopAll.disabled = true;
-        btnRerunTask.disabled = true;
+        sinceBadge.textContent = '';
+        btnStopAll.style.display = 'none';
+        btnRerunTask.style.display = 'none';
+        btnOpenAnalysis.classList.remove('pulse');
       }
     }
 
@@ -618,7 +672,6 @@ function renderArenaHtml(webview) {
       const preset = (state.presets || [])[idx];
       if (!preset) return;
       if (state.activeTask) {
-        // Fork into draft mode with preset toggled
         state.activeTaskId = null;
         state.activeTask = null;
       }
@@ -626,24 +679,21 @@ function renderArenaHtml(webview) {
       const found = draftAgents.findIndex((c) => configKeyOf(c) === key);
       if (found >= 0) draftAgents.splice(found, 1);
       else draftAgents.push({ ...preset, label: preset.label || key });
+      agentsDrawerOpen = true;
       renderAll();
     });
 
     function filterFeedItems(feed, filter) {
       const list = Array.isArray(feed) ? feed : [];
-      if (filter === 'tools') {
-        return list.filter((x) => x.kind === 'tool' || x.kind === 'tool_result');
-      }
-      if (filter === 'errors') {
-        return list.filter((x) => x.kind === 'error' || x.kind === 'stderr' || x.kind === 'notice');
-      }
+      if (filter === 'tools') return list.filter((x) => x.kind === 'tool' || x.kind === 'tool_result');
+      if (filter === 'errors') return list.filter((x) => x.kind === 'error' || x.kind === 'stderr' || x.kind === 'notice');
       return list;
     }
 
     function renderFeedItems(feed, filter = 'all') {
       const items = filterFeedItems(feed, filter);
       if (!items.length) {
-        return '<div class="muted" style="padding:12px 4px;">' + (feed && feed.length ? 'No matching events for this filter.' : 'Waiting for output…') + '</div>';
+        return '<div class="muted" style="padding:12px 4px;">' + (feed && feed.length ? 'No events for this filter.' : 'Waiting for stream…') + '</div>';
       }
       return items.map((item) => {
         return '<div class="feed-item ' + esc(item.kind || 'log') + '">' +
@@ -665,9 +715,9 @@ function renderArenaHtml(webview) {
       for (const f of ch.deleted || []) {
         chips.push('<span class="file-chip"><span class="tag-D">D</span> ' + esc(f) + '</span>');
       }
-      if (!chips.length) return '<span class="muted">No workspace file changes recorded.</span>';
+      if (!chips.length) return '';
       const prefix = isDirect
-        ? '<div class="muted" style="font-size:10.5px;margin-bottom:3px;">Shared workspace changes (use Scratch/CoW/Worktree for isolated per-agent diffs)</div>'
+        ? '<div class="muted" style="font-size:10.5px;">Shared workspace changes</div>'
         : '';
       return prefix + '<div class="file-chips">' + chips.join('') + '</div>';
     }
@@ -675,21 +725,47 @@ function renderArenaHtml(webview) {
     function renderPaneFootHtml(cand, isIsolated) {
       const ch = cand.changedFiles || {};
       const fileCount = (ch.added || []).length + (ch.modified || []).length + (ch.deleted || []).length;
+      if (!fileCount) return '';
       return '<div class="pane-files-list">' + renderFilesList(cand, !isIsolated) + '</div>' +
-        '<div style="display:flex;gap:6px;justify-content:flex-end;">' +
-          '<button data-action="copyFinal" data-cid="' + esc(cand.id) + '" style="font-size:11px;padding:2px 8px;">Copy Output</button>' +
-          (isIsolated && fileCount > 0 ? '<button data-action="adoptCand" data-cid="' + esc(cand.id) + '" style="font-size:11px;padding:2px 8px;">Adopt into Workspace</button>' : '') +
-        '</div>';
+        (isIsolated
+          ? '<div style="display:flex;justify-content:flex-end;"><button data-action="adoptCand" data-cid="' + esc(cand.id) + '" style="font-size:11px;padding:2px 8px;">Adopt Files</button></div>'
+          : '');
     }
 
-    function statusBadgeHtml(c) {
-      if (c.status === 'running') return '<span class="badge running"><span class="spinner"></span>Running</span>';
+    function elapsedOf(c) {
+      return c.status === 'running' && c.startedAt
+        ? fmtDuration(Date.now() - Date.parse(c.startedAt))
+        : fmtDuration(c.durationMs);
+    }
+
+    function statusChipHtml(c) {
+      const t = elapsedOf(c);
+      if (c.status === 'running') {
+        return '<span class="badge running"><span class="spinner"></span>Running · <span class="mono pane-timer" data-status="running" data-start="' + esc(c.startedAt || '') + '">' + t + '</span></span>';
+      }
       if (c.status === 'pending') return '<span class="badge running">Queued</span>';
-      if (c.status === 'done') return '<span class="badge done">Done ✓</span>';
-      if (c.status === 'failed') return '<span class="badge failed">Failed ✗</span>';
-      if (c.status === 'cancelled') return '<span class="badge cancelled">Stopped</span>';
-      if (c.status === 'interrupted') return '<span class="badge cancelled">Interrupted</span>';
+      if (c.status === 'done') return '<span class="badge done">Done · ' + t + '</span>';
+      if (c.status === 'failed') return '<span class="badge failed">Failed · ' + t + '</span>';
+      if (c.status === 'cancelled') return '<span class="badge cancelled">Stopped · ' + t + '</span>';
+      if (c.status === 'interrupted') return '<span class="badge cancelled">Interrupted · ' + t + '</span>';
       return '<span class="badge">Ready</span>';
+    }
+
+    function metaLineInfo(c) {
+      const tel = c.telemetry || {};
+      const tot = tel.totalTokens !== null && tel.totalTokens !== undefined
+        ? tel.totalTokens
+        : (tel.inputTokens !== null ? (tel.inputTokens || 0) + (tel.outputTokens || 0) : null);
+      const parts = [];
+      if (tot !== null) parts.push(fmtTokens(tot) + ' tok');
+      if (tel.toolCalls) parts.push(tel.toolCalls + ' tools');
+      else if (tel.numTurns) parts.push(tel.numTurns + ' turns');
+      if (typeof tel.costUsd === 'number' && tel.costUsd > 0) parts.push(fmtCost(tel.costUsd));
+      const summary = parts.length ? parts.join(' · ') : (c.status === 'running' ? 'streaming…' : '—');
+      const tip = (tel.inputTokens !== null || tel.outputTokens !== null)
+        ? ('in ' + fmtTokens(tel.inputTokens) + ' · cached ' + fmtTokens(tel.cachedTokens) + ' · out ' + fmtTokens(tel.outputTokens))
+        : 'Telemetry';
+      return { summary, tip };
     }
 
     function renderPaneBodyContent(cand, mode, filter = 'all') {
@@ -697,13 +773,35 @@ function renderArenaHtml(webview) {
         const raw = rawCache[cand.id];
         if (raw === undefined) {
           vscode.postMessage({ type: 'loadRawLog', taskId: state.activeTask.id, candId: cand.id });
-          return '<div class="muted">Loading raw stdout/stderr…</div>';
+          return '<div class="muted">Loading raw log…</div>';
         }
         return '<pre class="raw-box">' + esc(raw || '(empty)') + '</pre>';
       }
-      if (mode === 'final') {
-        const txt = cand.finalText || cand.error || '(No final assistant message yet)';
-        return '<pre class="raw-box" style="font-family:inherit;font-size:12.5px;">' + esc(txt) + '</pre>';
+      if (mode.startsWith('file:')) {
+        const relPath = mode.slice(5);
+        const ck = state.activeTask.id + '::' + cand.id + '::' + relPath;
+        const cached = fileCache[ck];
+        if (!cached) {
+          vscode.postMessage({ type: 'loadFileContent', taskId: state.activeTask.id, candId: cand.id, relPath });
+          return '<div class="muted">Loading ' + esc(relPath) + '…</div>';
+        }
+        if (cached.error) {
+          return '<div class="muted">' + esc(cached.error) + '</div>';
+        }
+        if (paneRawText[cand.id]) {
+          return '<pre class="raw-box">' + esc(cached.text || '') + '</pre>';
+        }
+        return renderMarkdown(cached.text || '(empty file)');
+      }
+      if (mode === 'output') {
+        const txt = cand.finalText || cand.error || '';
+        if (!txt) {
+          return '<div class="muted">' + (cand.status === 'running' ? 'Waiting for final response…' : '(No final response captured)') + '</div>';
+        }
+        if (paneRawText[cand.id]) {
+          return '<pre class="raw-box">' + esc(txt) + '</pre>';
+        }
+        return renderMarkdown(txt);
       }
       return renderFeedItems(cand.feedPreview || [], filter);
     }
@@ -711,7 +809,7 @@ function renderArenaHtml(webview) {
     function renderColumns() {
       if (!state.activeTask) {
         if (!draftAgents.length) {
-          columnsWrap.innerHTML = '<div class="card muted" style="margin:auto;max-width:460px;text-align:center;">Click agent preset chips above to add side-by-side columns, enter one prompt below, and launch all agents concurrently.</div>';
+          columnsWrap.innerHTML = '<div class="card muted" style="margin:auto;max-width:440px;text-align:center;">Toggle agent presets above, write one prompt below, and press <strong>Run ⌘↵</strong> to compare side-by-side.</div>';
           return;
         }
         columnsWrap.innerHTML = draftAgents.map((c, idx) => {
@@ -719,12 +817,12 @@ function renderArenaHtml(webview) {
           return '<div class="pane">' +
             '<div class="pane-head">' +
               '<div class="pane-title-row">' +
-                '<div><div class="pane-name">' + esc(c.label || key) + '</div><div class="pane-sub">' + esc(key) + '</div></div>' +
-                '<button data-action="removeDraft" data-idx="' + idx + '" title="Remove column" style="padding:2px 6px;">×</button>' +
+                '<div class="pane-name">' + esc(c.label || key) + '</div>' +
+                '<button class="ghost" data-action="removeDraft" data-idx="' + idx + '" title="Remove" style="padding:1px 6px;">×</button>' +
               '</div>' +
-              '<div class="pane-status-row"><span class="badge">Ready</span><span class="mono muted">00:00</span></div>' +
+              '<div class="pane-meta-line"><span>' + esc(key) + '</span><span class="badge">Ready</span></div>' +
             '</div>' +
-            '<div class="pane-body muted" style="display:flex;align-items:center;justify-content:center;text-align:center;">Ready to launch with shared prompt below.</div>' +
+            '<div class="pane-body muted" style="display:flex;align-items:center;justify-content:center;text-align:center;">Ready to run with prompt below.</div>' +
           '</div>';
         }).join('');
         return;
@@ -733,56 +831,56 @@ function renderArenaHtml(webview) {
       const task = state.activeTask;
       const isIsolated = task.isolationMode !== 'direct';
       columnsWrap.innerHTML = (task.candidates || []).map((c) => {
-        const mode = paneModes[c.id] || 'feed';
+        const mode = effectivePaneMode(c);
         const filter = paneFilters[c.id] || 'all';
-        const tel = c.telemetry || {};
-        const ch = c.changedFiles || {};
-        const fileCount = (ch.added || []).length + (ch.modified || []).length + (ch.deleted || []).length;
-        const elapsed = c.status === 'running' && c.startedAt
-          ? fmtDuration(Date.now() - Date.parse(c.startedAt))
-          : fmtDuration(c.durationMs);
-        const tokStr = tel.totalTokens !== null && tel.totalTokens !== undefined
-          ? fmtTokens(tel.totalTokens)
-          : (tel.inputTokens !== null ? fmtTokens((tel.inputTokens || 0) + (tel.outputTokens || 0)) : '—');
-        const subTok = (tel.inputTokens !== null || tel.outputTokens !== null)
-          ? ('in ' + fmtTokens(tel.inputTokens) + ' · cac ' + fmtTokens(tel.cachedTokens) + ' · out ' + fmtTokens(tel.outputTokens))
-          : 'awaiting usage';
+        const showRawSrc = Boolean(paneRawText[c.id]);
+        const meta = metaLineInfo(c);
+        const mdFiles = candidateMarkdownFiles(task, c);
+        const footHtml = renderPaneFootHtml(c, isIsolated);
+        const showMarkdownTools = mode === 'output' || mode.startsWith('file:');
 
         return '<div class="pane" data-cand-id="' + esc(c.id) + '">' +
           '<div class="pane-head">' +
             '<div class="pane-title-row">' +
-              '<div><div class="pane-name">' + esc(c.label) + '</div><div class="pane-sub">' + esc(c.configKey) + '</div></div>' +
-              '<span class="pane-head-actions">' +
+              '<div class="pane-name" title="' + esc(c.configKey) + '">' + esc(c.label) + '</div>' +
+              '<span class="pane-head-right">' +
+                '<span class="pane-status-slot">' + statusChipHtml(c) + '</span>' +
                 (c.status === 'running'
-                  ? '<button class="danger" data-action="cancelCand" data-cid="' + esc(c.id) + '" style="padding:2px 7px;font-size:11px;">Stop</button>'
+                  ? '<button class="danger" data-action="cancelCand" data-cid="' + esc(c.id) + '" style="padding:1px 7px;font-size:11px;">Stop</button>'
                   : '') +
               '</span>' +
             '</div>' +
-            '<div class="pane-status-row">' +
-              '<span class="pane-status-slot">' + statusBadgeHtml(c) + '</span>' +
-              '<span class="mono pane-timer" data-status="' + esc(c.status) + '" data-start="' + esc(c.startedAt || '') + '">' + elapsed + '</span>' +
+            '<div class="pane-meta-line">' +
+              '<span class="pane-meta-summary" title="' + esc(meta.tip) + '">' + esc(meta.summary) + '</span>' +
             '</div>' +
-          '</div>' +
-          '<div class="pane-metrics">' +
-            '<div class="metric-cell" title="' + esc(subTok) + '"><span class="metric-label">Tokens</span><span class="metric-val pane-tok">' + tokStr + '</span></div>' +
-            '<div class="metric-cell"><span class="metric-label">Turns / Tools</span><span class="metric-val pane-turns">' + (tel.numTurns || 0) + ' / ' + (tel.toolCalls || 0) + '</span></div>' +
-            '<div class="metric-cell"><span class="metric-label">Cost</span><span class="metric-val pane-cost">' + fmtCost(tel.costUsd) + '</span></div>' +
-            '<div class="metric-cell"><span class="metric-label">Files</span><span class="metric-val pane-files">' + fileCount + '</span></div>' +
           '</div>' +
           '<div class="pane-tabs">' +
-            '<div class="pane-tab-group">' +
-              '<button class="pane-tab' + (mode === 'feed' ? ' active' : '') + '" data-action="paneMode" data-cid="' + esc(c.id) + '" data-mode="feed">Live Feed</button>' +
-              '<button class="pane-tab' + (mode === 'final' ? ' active' : '') + '" data-action="paneMode" data-cid="' + esc(c.id) + '" data-mode="final">Final Answer</button>' +
-              '<button class="pane-tab' + (mode === 'raw' ? ' active' : '') + '" data-action="paneMode" data-cid="' + esc(c.id) + '" data-mode="raw">Raw Log</button>' +
+            '<div class="pane-tab-left">' +
+              '<div class="segmented">' +
+                '<button class="seg-btn' + (mode === 'output' ? ' active' : '') + '" data-action="paneMode" data-cid="' + esc(c.id) + '" data-mode="output">Output</button>' +
+                '<button class="seg-btn' + (mode === 'activity' ? ' active' : '') + '" data-action="paneMode" data-cid="' + esc(c.id) + '" data-mode="activity">Activity</button>' +
+                '<button class="seg-btn' + (mode === 'raw' ? ' active' : '') + '" data-action="paneMode" data-cid="' + esc(c.id) + '" data-mode="raw">Raw</button>' +
+              '</div>' +
+              mdFiles.map((f) => {
+                const fm = 'file:' + f;
+                const base = f.split('/').pop();
+                return '<button class="md-file-pill' + (mode === fm ? ' active' : '') + '" data-action="paneMode" data-cid="' + esc(c.id) + '" data-mode="' + esc(fm) + '" title="' + esc(f) + '">📄 ' + esc(base) + '</button>';
+              }).join('') +
             '</div>' +
-            '<div class="pane-filters" style="display:' + (mode === 'feed' ? 'inline-flex' : 'none') + ';">' +
-              '<button class="pane-filter' + (filter === 'all' ? ' active' : '') + '" data-action="paneFilter" data-cid="' + esc(c.id) + '" data-filter="all">All</button>' +
-              '<button class="pane-filter' + (filter === 'tools' ? ' active' : '') + '" data-action="paneFilter" data-cid="' + esc(c.id) + '" data-filter="tools">Tools</button>' +
-              '<button class="pane-filter' + (filter === 'errors' ? ' active' : '') + '" data-action="paneFilter" data-cid="' + esc(c.id) + '" data-filter="errors">Errors</button>' +
+            '<div class="pane-tab-right">' +
+              '<span class="pane-filters" style="display:' + (mode === 'activity' ? 'inline-flex' : 'none') + ';gap:2px;">' +
+                '<button class="mini-btn' + (filter === 'all' ? ' active' : '') + '" data-action="paneFilter" data-cid="' + esc(c.id) + '" data-filter="all">All</button>' +
+                '<button class="mini-btn' + (filter === 'tools' ? ' active' : '') + '" data-action="paneFilter" data-cid="' + esc(c.id) + '" data-filter="tools">Tools</button>' +
+                '<button class="mini-btn' + (filter === 'errors' ? ' active' : '') + '" data-action="paneFilter" data-cid="' + esc(c.id) + '" data-filter="errors">Errors</button>' +
+              '</span>' +
+              '<span class="pane-output-tools" style="display:' + (showMarkdownTools ? 'inline-flex' : 'none') + ';gap:2px;">' +
+                '<button class="mini-btn' + (showRawSrc ? ' active' : '') + '" data-action="toggleSrc" data-cid="' + esc(c.id) + '" title="Toggle rendered Markdown vs raw source">' + (showRawSrc ? 'MD' : 'Src') + '</button>' +
+                '<button class="mini-btn" data-action="copyFinal" data-cid="' + esc(c.id) + '" title="Copy output text">Copy</button>' +
+              '</span>' +
             '</div>' +
           '</div>' +
           '<div class="pane-body">' + renderPaneBodyContent(c, mode, filter) + '</div>' +
-          '<div class="pane-foot">' + renderPaneFootHtml(c, isIsolated) + '</div>' +
+          '<div class="pane-foot" style="display:' + (footHtml ? 'flex' : 'none') + ';">' + footHtml + '</div>' +
         '</div>';
       }).join('');
     }
@@ -796,57 +894,50 @@ function renderArenaHtml(webview) {
         renderColumns();
         return;
       }
-      const headActions = pane.querySelector('.pane-head-actions');
-      if (headActions) {
-        headActions.innerHTML = cand.status === 'running'
-          ? '<button class="danger" data-action="cancelCand" data-cid="' + esc(cand.id) + '" style="padding:2px 7px;font-size:11px;">Stop</button>'
-          : '';
+
+      const headRight = pane.querySelector('.pane-head-right');
+      if (headRight) {
+        headRight.innerHTML =
+          '<span class="pane-status-slot">' + statusChipHtml(cand) + '</span>' +
+          (cand.status === 'running'
+            ? '<button class="danger" data-action="cancelCand" data-cid="' + esc(cand.id) + '" style="padding:1px 7px;font-size:11px;">Stop</button>'
+            : '');
       }
 
-      const statusSlot = pane.querySelector('.pane-status-slot');
-      if (statusSlot) statusSlot.innerHTML = statusBadgeHtml(cand);
-
-      const timer = pane.querySelector('.pane-timer');
-      if (timer) {
-        timer.setAttribute('data-status', cand.status);
-        timer.setAttribute('data-start', cand.startedAt || '');
-        timer.textContent = cand.status === 'running' && cand.startedAt
-          ? fmtDuration(Date.now() - Date.parse(cand.startedAt))
-          : fmtDuration(cand.durationMs);
+      const meta = metaLineInfo(cand);
+      const metaEl = pane.querySelector('.pane-meta-summary');
+      if (metaEl) {
+        metaEl.textContent = meta.summary;
+        metaEl.title = meta.tip;
       }
 
-      const tel = cand.telemetry || {};
-      const ch = cand.changedFiles || {};
-      const fileCount = (ch.added || []).length + (ch.modified || []).length + (ch.deleted || []).length;
-      const tokEl = pane.querySelector('.pane-tok');
-      if (tokEl) {
-        tokEl.textContent = tel.totalTokens !== null && tel.totalTokens !== undefined
-          ? fmtTokens(tel.totalTokens)
-          : (tel.inputTokens !== null ? fmtTokens((tel.inputTokens || 0) + (tel.outputTokens || 0)) : '—');
-      }
-      const turnsEl = pane.querySelector('.pane-turns');
-      if (turnsEl) turnsEl.textContent = (tel.numTurns || 0) + ' / ' + (tel.toolCalls || 0);
-      const costEl = pane.querySelector('.pane-cost');
-      if (costEl) costEl.textContent = fmtCost(tel.costUsd);
-      const filesEl = pane.querySelector('.pane-files');
-      if (filesEl) filesEl.textContent = String(fileCount);
-
-      const mode = paneModes[cand.id] || 'feed';
+      const mode = effectivePaneMode(cand);
       const filter = paneFilters[cand.id] || 'all';
-      pane.querySelectorAll('.pane-tab[data-action="paneMode"]').forEach((el) => {
+      const showRawSrc = Boolean(paneRawText[cand.id]);
+      const showMarkdownTools = mode === 'output' || mode.startsWith('file:');
+
+      pane.querySelectorAll('[data-action="paneMode"]').forEach((el) => {
         el.classList.toggle('active', el.getAttribute('data-mode') === mode);
       });
       const filterWrap = pane.querySelector('.pane-filters');
-      if (filterWrap) filterWrap.style.display = mode === 'feed' ? 'inline-flex' : 'none';
-      pane.querySelectorAll('.pane-filter[data-action="paneFilter"]').forEach((el) => {
+      if (filterWrap) filterWrap.style.display = mode === 'activity' ? 'inline-flex' : 'none';
+      pane.querySelectorAll('.mini-btn[data-action="paneFilter"]').forEach((el) => {
         el.classList.toggle('active', el.getAttribute('data-filter') === filter);
       });
+
+      const outTools = pane.querySelector('.pane-output-tools');
+      if (outTools) outTools.style.display = showMarkdownTools ? 'inline-flex' : 'none';
+      const srcBtn = pane.querySelector('.mini-btn[data-action="toggleSrc"]');
+      if (srcBtn) {
+        srcBtn.classList.toggle('active', showRawSrc);
+        srcBtn.textContent = showRawSrc ? 'MD' : 'Src';
+      }
 
       const body = pane.querySelector('.pane-body');
       if (body && mode !== 'raw') {
         const atBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 32;
         body.innerHTML = renderPaneBodyContent(cand, mode, filter);
-        if (atBottom && mode === 'feed') {
+        if (atBottom && mode === 'activity') {
           body.scrollTop = body.scrollHeight;
         }
       }
@@ -854,9 +945,13 @@ function renderArenaHtml(webview) {
         delete rawCache[cand.id];
       }
 
-      const foot = pane.querySelector('.pane-foot');
       const isIsolated = state.activeTask.isolationMode !== 'direct';
-      if (foot) foot.innerHTML = renderPaneFootHtml(cand, isIsolated);
+      const foot = pane.querySelector('.pane-foot');
+      if (foot) {
+        const footHtml = renderPaneFootHtml(cand, isIsolated);
+        foot.innerHTML = footHtml;
+        foot.style.display = footHtml ? 'flex' : 'none';
+      }
 
       renderTopControls();
     }
@@ -872,16 +967,20 @@ function renderArenaHtml(webview) {
       }
       const cid = btn.getAttribute('data-cid');
       const taskId = state.activeTask && state.activeTask.id;
+      const cand = state.activeTask && (state.activeTask.candidates || []).find((x) => x.id === cid);
       if (action === 'paneMode') {
         paneModes[cid] = btn.getAttribute('data-mode');
-        const cand = (state.activeTask.candidates || []).find((x) => x.id === cid);
         if (cand) patchCandidateInPlace({ ...cand, taskId });
         return;
       }
       if (action === 'paneFilter') {
         paneFilters[cid] = btn.getAttribute('data-filter') || 'all';
-        paneModes[cid] = 'feed';
-        const cand = (state.activeTask.candidates || []).find((x) => x.id === cid);
+        paneModes[cid] = 'activity';
+        if (cand) patchCandidateInPlace({ ...cand, taskId });
+        return;
+      }
+      if (action === 'toggleSrc') {
+        paneRawText[cid] = !paneRawText[cid];
         if (cand) patchCandidateInPlace({ ...cand, taskId });
         return;
       }
@@ -892,10 +991,16 @@ function renderArenaHtml(webview) {
       } else if (action === 'diffFile') {
         vscode.postMessage({ type: 'diffFile', taskId, candId: cid, relPath: btn.getAttribute('data-path') });
       } else if (action === 'copyFinal') {
-        const cand = (state.activeTask.candidates || []).find((x) => x.id === cid);
         if (cand && navigator.clipboard) {
-          navigator.clipboard.writeText(cand.finalText || '');
-          composerStatus.textContent = 'Copied final output from ' + cand.label;
+          const mode = effectivePaneMode(cand);
+          let toCopy = cand.finalText || '';
+          if (mode.startsWith('file:')) {
+            const rel = mode.slice(5);
+            const cached = fileCache[taskId + '::' + cid + '::' + rel];
+            if (cached && cached.text) toCopy = cached.text;
+          }
+          navigator.clipboard.writeText(toCopy);
+          composerStatus.textContent = 'Copied output from ' + cand.label;
         }
       } else if (action === 'adoptCand') {
         vscode.postMessage({ type: 'adoptCandidate', taskId, candId: cid });
@@ -917,25 +1022,26 @@ function renderArenaHtml(webview) {
       const allSettled = tutTask && cands.length > 0 && !anyRunning;
       const isJudged = tutTask && Boolean(tutTask.judgment);
 
-      const s1Done = hEntries.length > 0;
-      const s2Done = Boolean(tutTask);
-      const s3Done = Boolean(allSettled);
-      const s4Done = Boolean(isJudged);
+      const s1 = hEntries.length > 0;
+      const s2 = Boolean(tutTask);
+      const s3 = Boolean(allSettled);
+      const s4 = Boolean(isJudged);
 
       tutorialBanner.innerHTML =
-        '<div class="tutorial-head">' +
-          '<div><strong>Welcome to Agent Arena — Live Tutorial</strong> <span class="muted" style="font-size:11.5px;">Run a real multi-agent check on your workspace (not a replay)</span></div>' +
-          '<div style="display:flex;gap:6px;align-items:center;">' +
-            (!tutTask || allSettled ? '<button id="btnRunTutorial" class="primary">▶ Run Live Tutorial (Real Agents)</button>' : '') +
-            (allSettled ? '<button id="btnTutorialAnalyze" class="primary">Open Analysis &amp; Judge ↗</button>' : '') +
-            '<button id="btnDismissTutorial" title="Hide tutorial">Dismiss</button>' +
-          '</div>' +
+        '<div class="tut-steps-inline">' +
+          '<strong>Welcome</strong>' +
+          '<span class="tut-pill ' + (s1 ? 'done' : 'active') + '">1 Detect' + (s1 ? ' ✓' : '') + '</span>' +
+          '<span class="muted">→</span>' +
+          '<span class="tut-pill ' + (s2 ? 'done' : 'active') + '">2 Run' + (s2 ? ' ✓' : '') + '</span>' +
+          '<span class="muted">→</span>' +
+          '<span class="tut-pill ' + (s3 ? 'done' : (anyRunning ? 'active' : '')) + '">3 Compare' + (s3 ? ' ✓' : '') + '</span>' +
+          '<span class="muted">→</span>' +
+          '<span class="tut-pill ' + (s4 ? 'done' : (allSettled ? 'active' : '')) + '">4 Judge' + (s4 ? ' ✓' : '') + '</span>' +
         '</div>' +
-        '<div class="tutorial-steps">' +
-          '<div class="t-step ' + (s1Done ? 'done' : 'active') + '"><div class="t-step-title">1. Detect Harnesses</div><div class="muted">' + (s1Done ? ('Ready: ' + esc(hEntries.join(', '))) : 'No CLIs detected in PATH yet') + '</div></div>' +
-          '<div class="t-step ' + (s2Done ? 'done' : 'active') + '"><div class="t-step-title">2. Launch Live Trial</div><div class="muted">Preloads a fast workspace summary prompt across 3 real CLIs</div></div>' +
-          '<div class="t-step ' + (s3Done ? 'done' : (anyRunning ? 'active' : '')) + '"><div class="t-step-title">3. Watch Side-by-Side</div><div class="muted">' + (anyRunning ? 'Streaming live tokens & elapsed timers…' : (s3Done ? 'All tutorial panes settled' : 'Columns stream concurrently once launched')) + '</div></div>' +
-          '<div class="t-step ' + (s4Done ? 'done' : (allSettled ? 'active' : '')) + '"><div class="t-step-title">4. Analyze &amp; Blind Judge</div><div class="muted">' + (s4Done ? 'First judgment saved to Leaderboard!' : 'Inspect tokens/time & pick a blind winner') + '</div></div>' +
+        '<div style="display:flex;gap:6px;align-items:center;">' +
+          (!tutTask || allSettled ? '<button id="btnRunTutorial" class="primary" style="padding:3px 10px;font-size:11.5px;">▶ Live Tutorial</button>' : '') +
+          (allSettled ? '<button id="btnTutorialAnalyze" style="padding:3px 10px;font-size:11.5px;">Open Analysis ↗</button>' : '') +
+          '<button id="btnDismissTutorial" class="ghost" style="padding:2px 6px;" title="Hide tutorial">×</button>' +
         '</div>';
     }
 
@@ -953,7 +1059,7 @@ function renderArenaHtml(webview) {
         if (isLaunching) return;
         const configs = (state.tutorialPresets && state.tutorialPresets.length) ? state.tutorialPresets : draftAgents;
         if (!configs.length) {
-          composerStatus.textContent = 'Select at least one available agent above.';
+          composerStatus.textContent = 'Select at least one available agent first.';
           return;
         }
         state.activeTaskId = null;
@@ -963,7 +1069,7 @@ function renderArenaHtml(webview) {
         if (!titleInput.value.trim()) titleInput.value = 'Live Welcome Tutorial';
         if (!tagsInput.value.trim()) tagsInput.value = 'tutorial';
         isolationSelect.value = 'scratch';
-        updateIsolationHint();
+        agentsDrawerOpen = false;
         isLaunching = true;
         btnLaunch.disabled = true;
         setTimeout(() => {
@@ -1016,11 +1122,10 @@ function renderArenaHtml(webview) {
         if (!prevMode || !state.activeTask) {
           isolationSelect.value = state.defaultIsolationMode || 'direct';
         }
-        updateIsolationHint();
         renderAll();
         if (state.activeTask) {
           const anyRunning = (state.activeTask.candidates || []).some((c) => c.status === 'running' || c.status === 'pending');
-          composerStatus.textContent = anyRunning ? 'Agents running concurrently…' : 'Run complete. Open Analysis & Telemetry for deep comparison.';
+          composerStatus.textContent = anyRunning ? 'Running concurrently…' : 'Complete.';
         }
       } else if (msg.type === 'candidateProgress') {
         patchCandidateInPlace(msg.payload);
@@ -1028,23 +1133,35 @@ function renderArenaHtml(webview) {
       } else if (msg.type === 'rawLogLoaded') {
         rawCache[msg.payload.candId] = msg.payload.text;
         const pane = columnsWrap.querySelector('.pane[data-cand-id="' + CSS.escape(msg.payload.candId) + '"]');
-        if (pane && (paneModes[msg.payload.candId] || 'feed') === 'raw') {
-          const body = pane.querySelector('.pane-body');
-          if (body) body.innerHTML = '<pre class="raw-box">' + esc(msg.payload.text || '(empty)') + '</pre>';
+        if (pane && state.activeTask) {
+          const cand = (state.activeTask.candidates || []).find((x) => x.id === msg.payload.candId);
+          if (cand && effectivePaneMode(cand) === 'raw') {
+            const body = pane.querySelector('.pane-body');
+            if (body) body.innerHTML = '<pre class="raw-box">' + esc(msg.payload.text || '(empty)') + '</pre>';
+          }
+        }
+      } else if (msg.type === 'fileContentLoaded') {
+        const p = msg.payload || {};
+        const ck = p.taskId + '::' + p.candId + '::' + p.relPath;
+        fileCache[ck] = { text: p.text || '', error: p.error || null };
+        if (state.activeTask && state.activeTask.id === p.taskId) {
+          const cand = (state.activeTask.candidates || []).find((x) => x.id === p.candId);
+          if (cand && effectivePaneMode(cand) === 'file:' + p.relPath) {
+            patchCandidateInPlace({ ...cand, taskId: p.taskId });
+          }
         }
       } else if (msg.type === 'errorToast') {
         composerStatus.textContent = msg.payload;
       }
     });
 
-    // Live 1s timer tick for running panes and "since created"
     setInterval(() => {
       document.querySelectorAll('.pane-timer[data-status="running"]').forEach((el) => {
         const st = el.getAttribute('data-start');
         if (st) el.textContent = fmtDuration(Date.now() - Date.parse(st));
       });
       if (state.activeTask) {
-        sinceBadge.textContent = 'Created ' + fmtTimeShort(state.activeTask.createdAt) + ' (' + fmtSince(state.activeTask.createdAt) + ') · ' + state.activeTask.isolationMode;
+        sinceBadge.textContent = fmtSince(state.activeTask.createdAt) + ' · ' + state.activeTask.isolationMode;
       }
     }, 1000);
 

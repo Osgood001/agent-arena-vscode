@@ -12,6 +12,8 @@ const ROOT = path.resolve(__dirname, '..');
 const store = require(path.join(ROOT, 'lib/store'));
 const harnesses = require(path.join(ROOT, 'lib/harnesses'));
 const isolator = require(path.join(ROOT, 'lib/isolator'));
+const judge = require(path.join(ROOT, 'lib/judge'));
+const markdown = require(path.join(ROOT, 'lib/markdown'));
 const stats = require(path.join(ROOT, 'lib/stats'));
 const { renderSidebarHtml } = require(path.join(ROOT, 'webview/sidebar'));
 const { renderArenaHtml } = require(path.join(ROOT, 'webview/arena'));
@@ -597,10 +599,15 @@ async function main() {
       assert(m, `Missing script block in ${name}`);
       new vm.Script(m[1], { filename: `${name}.inline.js` });
     }
+    assert(htmlMap.arena.includes('renderMarkdown('));
     assert(htmlMap.arena.includes('paneFilter'));
     assert(htmlMap.arena.includes('btnRerunTask'));
+    assert(htmlMap.analysis.includes('renderMarkdown('));
     assert(htmlMap.analysis.includes('Blind Mode Active'));
     assert(htmlMap.analysis.includes('btnCopyPrompt'));
+    assert(htmlMap.analysis.includes('deepTelemetry'));
+    assert(htmlMap.analysis.includes('deepStats'));
+    assert(htmlMap.analysis.includes('btnRunAiJudge'));
   });
 
   await test('10. extension.js activates, handles webview messages, enforces delete confirmation & duplicate-launch lock, and deactivates', async () => {
@@ -760,6 +767,8 @@ async function main() {
       path.join(ROOT, 'extension.js'),
       path.join(ROOT, 'lib/harnesses.js'),
       path.join(ROOT, 'lib/isolator.js'),
+      path.join(ROOT, 'lib/judge.js'),
+      path.join(ROOT, 'lib/markdown.js'),
       path.join(ROOT, 'lib/store.js'),
       path.join(ROOT, 'lib/stats.js'),
       path.join(ROOT, 'webview/common.js'),
@@ -778,6 +787,312 @@ async function main() {
           `Public-hygiene check failed: forbidden term found in ${path.relative(ROOT, fp)}`,
         );
       }
+    }
+  });
+
+  await test('12. lib/markdown.js renders GFM constructs safely and blocks XSS payloads', () => {
+    const md = [
+      '# Main Title',
+      '',
+      'Summary with **bold**, *italic*, ~~old~~, `inline_code`, and snake_case_var.',
+      '',
+      '- [x] Task done',
+      '- [ ] Task pending',
+      '  - Nested item',
+      '',
+      '1. First step',
+      '2. Second step',
+      '',
+      '> Quoted insight',
+      '',
+      '| Module | Alignment | Status |',
+      '| :--- | :---: | ---: |',
+      '| `harnesses.js` | center | **ok** |',
+      '',
+      '```js',
+      'const x = "**not bold**";',
+      '<script>alert(1)</script>',
+      '```',
+      '',
+      '[Safe Link](https://example.com/docs?a=1&b=2)',
+      '[Bad JS](javascript:alert(1))',
+      '[Bad Data](data:text/html,<script>alert(1)</script>)',
+      '<img src=x onerror=alert(1)>',
+    ].join('\n');
+
+    const html = markdown.renderMarkdown(md);
+    assert(html.includes('<h1>Main Title</h1>'));
+    assert(html.includes('<strong>bold</strong>'));
+    assert(html.includes('<em>italic</em>'));
+    assert(html.includes('<del>old</del>'));
+    assert(html.includes('<code>inline_code</code>'));
+    assert(html.includes('snake_case_var') && !html.includes('<em>case</em>'));
+    assert(html.includes('md-check checked'));
+    assert(html.includes('<ul>') && html.includes('<ol>'));
+    assert(html.includes('<blockquote>'));
+    assert(html.includes('<table class="md-table">'));
+    assert(html.includes('text-align:center'));
+    assert(html.includes('text-align:right'));
+    assert(html.includes('<div class="md-code-lang">js</div>'));
+    assert(html.includes('const x = &quot;**not bold**&quot;;'));
+    assert(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+    assert(!html.includes('<script>'));
+    assert(html.includes('href="https://example.com/docs?a=1&amp;b=2"'));
+    assert(!html.includes('javascript:'));
+    assert(!html.includes('data:text/html'));
+    assert(!html.includes('<img '));
+    assert(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+
+    // Also verify standalone script function compiles independently (as injected in webviews)
+    new vm.Script(`(${markdown.browserMarkdownScript()})("# Hi")`);
+  });
+
+  await test('13. lib/judge.js resolves configs, builds blind prompts with .md docs, parses JSON, and runs live agent judge', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'arena-judge-'));
+    try {
+      const ws = path.join(tmp, 'ws');
+      fs.mkdirSync(ws, { recursive: true });
+
+      const task = store.createTask(ws, {
+        title: 'Markdown Report Bench',
+        prompt: 'Write a report',
+        isolationMode: 'scratch',
+        blindSeed: 42,
+        configs: [
+          { label: 'Codex · o3-mini', harness: 'codex', model: 'o3-mini', effort: 'low' },
+          { label: 'Claude · claude-sonnet', harness: 'claude', model: 'claude-sonnet', effort: 'medium' },
+        ],
+      });
+      await isolator.prepareTaskEnvironment(ws, task);
+      task.candidates[0].status = 'done';
+      task.candidates[0].durationMs = 4200;
+      task.candidates[0].telemetry = { ...store.emptyTelemetry(), totalTokens: 500 };
+      task.candidates[0].finalText = 'See `report.md`';
+      task.candidates[0].changedFiles = { added: ['report.md'], modified: [], deleted: [] };
+      fs.writeFileSync(path.join(task.candidates[0].workDir, 'report.md'), '# First Report\nClean findings.', 'utf8');
+
+      task.candidates[1].status = 'done';
+      task.candidates[1].durationMs = 6800;
+      task.candidates[1].telemetry = { ...store.emptyTelemetry(), totalTokens: 900 };
+      task.candidates[1].finalText = 'Second submission text.';
+      store.saveTask(ws, task);
+
+      // Blind prompt hides real harness/model labels and includes scratch report.md content
+      const blindBuilt = judge.buildJudgePrompt(task, { blind: true, rubric: 'Prioritize clarity' });
+      assert(blindBuilt.prompt.includes('Candidate A') && blindBuilt.prompt.includes('Candidate B'));
+      assert(!blindBuilt.prompt.includes('o3-mini'));
+      assert(!blindBuilt.prompt.includes('claude-sonnet'));
+      assert(blindBuilt.prompt.includes('Prioritize clarity'));
+      assert(blindBuilt.prompt.includes('# First Report'));
+
+      // Non-blind prompt preserves labels
+      const openBuilt = judge.buildJudgePrompt(task, { blind: false });
+      assert(openBuilt.prompt.includes('Codex · o3-mini'));
+      assert(openBuilt.prompt.includes('Claude · claude-sonnet'));
+
+      // Fenced JSON + short letter key + score clamping
+      const alias0 = task.blindMap[task.candidates[0].id];
+      const alias1 = task.blindMap[task.candidates[1].id];
+      const v1 = judge.parseJudgeOutput(
+        `Analysis...\n\`\`\`json\n${JSON.stringify({
+          winner: alias0,
+          isTie: false,
+          scores: {
+            [alias0]: { correctness: 9, clarity: 4.5, efficiency: 5 },
+            [alias1]: { correctness: 3, clarity: 3, efficiency: 2 },
+          },
+          rationale: 'Clear winner',
+        })}\n\`\`\``,
+        blindBuilt.aliasToCandId,
+      );
+      assert.strictEqual(v1.winnerId, task.candidates[0].id);
+      assert.strictEqual(v1.isTie, false);
+      assert.strictEqual(v1.scores[task.candidates[0].id].correctness, 5); // clamped
+      assert.strictEqual(v1.notes, 'Clear winner');
+
+      // Bare JSON fallback + Tie
+      const vTie = judge.parseJudgeOutput(
+        `Verdict: {"winner": null, "isTie": true, "scores": {"${alias0}": {"correctness": 4, "clarity": 4, "efficiency": 4}}, "rationale": "Even"}`,
+        blindBuilt.aliasToCandId,
+      );
+      assert.strictEqual(vTie.isTie, true);
+      assert.strictEqual(vTie.winnerId, null);
+
+      assert.throws(() => judge.parseJudgeOutput('no json here', blindBuilt.aliasToCandId));
+
+      // Live runAgentJudge using custom shell template
+      const jsonOut = JSON.stringify({
+        winner: alias1,
+        isTie: false,
+        scores: {
+          [alias0]: { correctness: 3, clarity: 4, efficiency: 4 },
+          [alias1]: { correctness: 5, clarity: 5, efficiency: 4 },
+        },
+        rationale: 'Second submission was more thorough.',
+      });
+      const b64 = Buffer.from(`\`\`\`json\n${jsonOut}\n\`\`\``, 'utf8').toString('base64');
+      const liveHandle = judge.runAgentJudge(ws, task, {
+        harness: 'custom',
+        model: 'shell-judge',
+        effort: '',
+        blind: true,
+        commandTemplate: `node -e "process.stdout.write(Buffer.from('${b64}','base64').toString('utf8'))"`,
+      });
+      const liveRes = await liveHandle.promise;
+      assert.strictEqual(liveRes.judgmentInput.judgeType, 'agent');
+      assert.strictEqual(liveRes.judgmentInput.winnerId, task.candidates[1].id);
+      assert.strictEqual(liveRes.judgmentInput.notes, 'Second submission was more thorough.');
+
+      const resolved = judge.resolveJudgeConfig({ harness: '' }, { harness: '' }, { claude: { available: false }, codex: { available: true } });
+      assert.strictEqual(resolved.harness, 'codex');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await test('14. extension.js handles loadFileContent, traversal block, runAgentJudge, and saveJudgeConfig', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'arena-v04-'));
+    try {
+      const ws = tmp;
+      const updates = [];
+      const panels = [];
+      const commands = new Map();
+      const globalStore = new Map();
+
+      const vscodeMock = {
+        ViewColumn: { One: 1, Beside: 2 },
+        StatusBarAlignment: { Left: 1, Right: 2 },
+        ConfigurationTarget: { Global: 1 },
+        Uri: { file: (p) => ({ fsPath: p }) },
+        workspace: {
+          workspaceFolders: [{ uri: { fsPath: ws } }],
+          getConfiguration: () => ({
+            get: () => undefined,
+            update: async (k, v, t) => updates.push({ k, v, t }),
+          }),
+          openTextDocument: async () => ({}),
+        },
+        window: {
+          createStatusBarItem: () => ({ show: () => {}, dispose: () => {} }),
+          registerWebviewViewProvider: () => ({ dispose: () => {} }),
+          createWebviewPanel: (_id, title) => {
+            let msgHandler = null;
+            const posted = [];
+            const panel = {
+              title,
+              webview: {
+                cspSource: 'vscode-webview://x',
+                html: '',
+                onDidReceiveMessage: (fn) => { msgHandler = fn; },
+                postMessage: (m) => { posted.push(m); },
+              },
+              reveal: () => {},
+              onDidDispose: () => {},
+              _trigger: (m) => msgHandler && msgHandler(m),
+              _posted: posted,
+            };
+            panels.push(panel);
+            return panel;
+          },
+          showInformationMessage: async () => undefined,
+          showWarningMessage: async () => undefined,
+          showErrorMessage: async () => undefined,
+          showTextDocument: async () => undefined,
+        },
+        commands: {
+          registerCommand: (id, fn) => { commands.set(id, fn); return { dispose: () => {} }; },
+          executeCommand: async () => undefined,
+        },
+      };
+
+      const task = store.createTask(ws, {
+        title: 'Extension v04 test',
+        prompt: 'Generate markdown',
+        isolationMode: 'scratch',
+        configs: [
+          { harness: 'custom', model: 'c1', effort: '', commandTemplate: 'echo 1' },
+          { harness: 'custom', model: 'c2', effort: '', commandTemplate: 'echo 2' },
+        ],
+      });
+      await isolator.prepareTaskEnvironment(ws, task);
+      fs.writeFileSync(path.join(task.candidates[0].workDir, 'out.md'), '# Output\nHello', 'utf8');
+      task.candidates[0].status = 'done';
+      task.candidates[0].finalText = 'Done 1';
+      task.candidates[1].status = 'done';
+      task.candidates[1].finalText = 'Done 2';
+      store.saveTask(ws, task);
+
+      const origLoad = Module._load;
+      Module._load = function patched(request) {
+        if (request === 'vscode') return vscodeMock;
+        return origLoad.apply(this, arguments);
+      };
+      try {
+        delete require.cache[require.resolve(path.join(ROOT, 'extension.js'))];
+        const ext = require(path.join(ROOT, 'extension.js'));
+        const ctx = {
+          subscriptions: [],
+          globalState: {
+            get: (k) => globalStore.get(k),
+            update: async (k, v) => globalStore.set(k, v),
+          },
+        };
+        ext.activate(ctx);
+
+        commands.get('agentArena.openAnalysis')(task.id);
+        const analysisP = panels[0];
+        await analysisP._trigger({ type: 'ready' });
+        assert(analysisP._posted.some((m) => m.type === 'state' && m.payload.judgeConfig));
+
+        // loadFileContent returns .md content & blocks ../ traversal
+        await analysisP._trigger({ type: 'loadFileContent', taskId: task.id, candId: task.candidates[0].id, relPath: 'out.md' });
+        const okFileMsg = analysisP._posted.find((m) => m.type === 'fileContentLoaded' && m.payload.relPath === 'out.md');
+        assert(okFileMsg && okFileMsg.payload.text.includes('# Output'));
+
+        await analysisP._trigger({ type: 'loadFileContent', taskId: task.id, candId: task.candidates[0].id, relPath: '../../etc/passwd' });
+        const errFileMsg = analysisP._posted.find((m) => m.type === 'fileContentLoaded' && m.payload.relPath === '../../etc/passwd');
+        assert(errFileMsg && errFileMsg.payload.error);
+
+        // saveJudgeConfig persists settings
+        await analysisP._trigger({
+          type: 'saveJudgeConfig',
+          payload: { harness: 'claude', model: 'sonnet', effort: 'high', blind: false, rubric: 'Concise' },
+        });
+        assert(updates.some((u) => u.k === 'judge.harness' && u.v === 'claude'));
+        assert(updates.some((u) => u.k === 'judge.rubric' && u.v === 'Concise'));
+
+        // runAgentJudge executes and stores agent judgment
+        const alias0 = task.blindMap[task.candidates[0].id];
+        const b64 = Buffer.from(
+          JSON.stringify({ winner: alias0, isTie: false, scores: { [alias0]: { correctness: 5, clarity: 5, efficiency: 5 } }, rationale: 'AI picked 0' }),
+          'utf8',
+        ).toString('base64');
+        await analysisP._trigger({
+          type: 'runAgentJudge',
+          taskId: task.id,
+          judgeConfig: {
+            harness: 'custom',
+            model: 'mock-judge',
+            effort: '',
+            blind: true,
+            commandTemplate: `node -e "process.stdout.write(Buffer.from('${b64}','base64').toString('utf8'))"`,
+          },
+        });
+        const judgedTask = store.loadTask(ws, task.id);
+        assert(judgedTask.judgment);
+        assert.strictEqual(judgedTask.judgment.judgeType, 'agent');
+        assert.strictEqual(judgedTask.judgment.winnerId, task.candidates[0].id);
+        assert.strictEqual(judgedTask.judgment.notes, 'AI picked 0');
+
+        for (const sub of ctx.subscriptions) {
+          if (sub && typeof sub.dispose === 'function') sub.dispose();
+        }
+        ext.deactivate();
+      } finally {
+        Module._load = origLoad;
+      }
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
 

@@ -1,46 +1,52 @@
 # Agent Arena
 
-**Run multiple AI coding harnesses, models, and reasoning efforts side-by-side in VS Code — compare live execution, token telemetry, elapsed time, diffs, and blind outcomes.**
+**Run multiple AI coding harnesses, models, and reasoning efforts side-by-side in VS Code — minimalist output comparison, rendered Markdown, AI-agent judging, and clean leaderboards.**
 
 [![CI](https://github.com/Osgood001/agent-arena-vscode/actions/workflows/ci.yml/badge.svg)](https://github.com/Osgood001/agent-arena-vscode/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-2a8c82.svg)](LICENSE)
 [![VS Code Engine](https://img.shields.io/badge/VS%20Code-%5E1.85.0-3a6ea5.svg)](https://code.visualstudio.com/)
 
-Agent Arena gives you a medium-agnostic benchmark cockpit right inside VS Code. Toggle any combination of locally installed agent CLIs (`codex`, `claude`, `opencode`, `pi`, `dsh`, or custom shell commands), launch one shared prompt concurrently across side-by-side columns, monitor real-time streams and token burn, and evaluate results blindly with confidence intervals and Bradley-Terry Elo rankings.
+Agent Arena gives you a calm, output-first benchmark cockpit right inside VS Code. Toggle any combination of locally installed agent CLIs (`codex`, `claude`, `opencode`, `pi`, `dsh`, or custom shell commands), launch one shared prompt concurrently across side-by-side columns, read rendered Markdown outputs (including generated `.md` files), run an automated AI judge or judge blindly yourself, and track clean Elo rankings with deeper telemetry one click away.
 
 ---
 
 ## Side-by-Side Live Arena
 
-Select presets or custom `(harness, model, effort)` columns, launch one prompt concurrently (`Cmd+Enter` / `Ctrl+Enter`), filter each pane's stream (`All` / `Tools` / `Errors`), track live ticking clocks and token telemetry, and jump straight to Analysis when finished.
+Minimalist workspace focused on agent output: auto-switches from live activity streams while running to rendered Markdown when settled, supports switching directly into `.md` artifacts produced in isolated runs, and tucks preset drawers and options cleanly out of the way.
 
 ![Agent Arena Side-by-Side Workspace](docs/screenshots/arena-side-by-side.png)
 
-## Analysis & Telemetry Dashboard
+## Clean Analysis & Configurable AI Agent Judge
 
-Inspect per-run execution KPIs, input/cached/output/reasoning token breakdowns, cache hit rates, elapsed wall-clock comparisons, workspace diffs (with native `vscode.diff`), blind A/B/C judging, and a persistent cross-task leaderboard.
+Review rendered Markdown responses side-by-side alongside a compact 5-column summary, evaluate outputs manually or click **Run AI Judge** using any configured coding agent (with optional blind candidate masking and custom rubric), and expand **Detailed Telemetry, Charts & Workspace Diffs** whenever you want full resource tables, token plots, or `vscode.diff` comparisons.
 
-![Run Analysis and Telemetry Breakdown](docs/screenshots/analysis-telemetry.png)
+![Run Analysis and AI Judge](docs/screenshots/analysis-telemetry.png)
 
-### All-Runs Leaderboard & Statistical Ranking
+### Clean Leaderboard & Expandable Statistics
 
-Track rolling performance across prompts with Wilson 95% confidence intervals on win rate, bootstrap 95% CIs on scores/duration/tokens, Laplace-smoothed Bradley-Terry Elo, Pareto latency-vs-quality plots, and pairwise win-tie-loss matrices.
+Uncluttered primary leaderboard (`Rank`, `Configuration`, `Elo`, `Win Rate`, `Avg Score`, `Median Time · Tokens`) with **Statistical Details, 95% CIs, Plots & Pairwise Matrix** tucked cleanly into a collapsible disclosure.
 
-![All-Runs Leaderboard with Error Bars and Pairwise Matrix](docs/screenshots/analysis-leaderboard.png)
+![All-Runs Leaderboard](docs/screenshots/analysis-leaderboard.png)
 
 ---
 
 ## Key Features
 
-- **Unified Concurrent Side-by-Side Columns**: Every `(harness, model, effort)` configuration runs in parallel in one panel, with per-pane status badges, ticking timers, live feeds, raw logs, final response tabs, and per-pane `All | Tools | Errors` filters.
-- **Built-in Live Welcome Tutorial**: First-time setup guides you through a *real* multi-agent execution (not a canned replay) on your workspace and walks through Analysis & Blind Judging.
-- **Zero-Config Local Auto-Discovery**: When `agentArena.presets` is empty (default), Agent Arena automatically inspects non-secret default model and effort fields from `~/.codex/config.toml`, `~/.claude/settings.json`, `~/.config/opencode/opencode.json`, and `~/.pi/agent/settings.json`.
+- **Minimalist Output-First Design**:
+  - Smart Arena view shows `Activity` while an agent runs and switches automatically to formatted `Output` once settled.
+  - Progressive disclosure keeps deep 12-column telemetry, SVG elapsed/token/forest/Pareto charts, Wilson/bootstrap 95% CIs, pairwise win matrices, and CSV/JSON export out of the way until you expand them.
+- **Rendered Markdown & Artifact Preview**:
+  - Zero-dependency, XSS-safe GitHub-Flavored Markdown renderer (headings, tables, fenced code blocks, task checkboxes, blockquotes, lists, sanitized links) with one-click `MD` / `Src` toggle.
+  - Inspect generated `.md` / `.markdown` files directly inside Arena panes or Analysis response cards, or open them in VS Code (`Open ↗`).
+- **Configurable Coding Agent as Judge**:
+  - Assign `codex`, `claude`, `opencode`, `pi`, `dsh`, or a `custom` shell template as judge via UI controls or `agentArena.judge.*` settings.
+  - Blindly masks submissions as `Candidate A/B/C` by default, attaches `.md` output files from isolated runs, accepts custom rubrics, persists scores and rationale (`⚡ AI Judge` provenance), and lets you review/adjust before saving.
+- **Zero-Config Local Auto-Discovery**: When `agentArena.presets` is empty (default), Agent Arena safely inspects non-secret default model and effort fields from `~/.codex/config.toml`, `~/.claude/settings.json`, `~/.config/opencode/opencode.json`, and `~/.pi/agent/settings.json`.
 - **Four Execution Isolation Modes**:
-  - `direct` *(default)*: Runs all selected agents directly in the shared workspace with instant startup and shared-workspace change badges.
-  - `scratch`: Gives each candidate an instant isolated working folder with a `workspace` symlink back to your project root.
-  - `apfs-cow`: Cross-platform copy-on-write clone (`cp -cRP` on macOS, `cp --reflink=auto` on Linux, size-guarded fallback) that automatically symlinks heavy directories (`node_modules`, `.venv`, `.git`, directories >250 entries).
-  - `git-worktree`: Creates detached `git worktree` checkouts per candidate for clean per-agent diffs and one-click `Adopt into Workspace`.
-- **Blind Evaluation & Telemetry Export**: Shuffles candidate identities as `Candidate A/B/C` during judging, stores scores/notes in `.agent-arena/tasks/<id>/task.json`, and exports complete CSV/JSON datasets.
+  - `direct` *(default)*: Instant shared workspace execution.
+  - `scratch`: Instant per-agent working folder with a `workspace` symlink back to your project root.
+  - `apfs-cow`: Cross-platform CoW clone (`cp -cRP` on macOS, `cp --reflink=auto` on Linux, size-guarded fallback) that automatically symlinks heavy directories (`node_modules`, `.venv`, `.git`, directories >250 entries).
+  - `git-worktree`: Detached `git worktree` per agent with clean per-agent diffs and one-click `Adopt Winner Files`.
 
 ---
 
@@ -70,18 +76,8 @@ code --install-extension Osgood001.agent-arena
 Download the latest `.vsix` from [Releases](https://github.com/Osgood001/agent-arena-vscode/releases) and install locally:
 
 ```sh
-code --install-extension agent-arena-0.3.0.vsix --force
+code --install-extension agent-arena-0.4.0.vsix --force
 ```
-
----
-
-## Quick Start
-
-1. Open the **Agent Arena** icon in the VS Code Activity Bar.
-2. Click **Open Side-by-Side Arena** (or **Live Welcome Tutorial** for a guided 3-CLI run).
-3. Toggle agent preset chips at the top or click **+ Custom** to add any harness/model/effort column.
-4. Pick an isolation mode (`Direct`, `Scratch`, `CoW Clone`, or `Git Worktree`), enter your prompt, and press `Cmd+Enter` (`Ctrl+Enter`).
-5. Click **Open Analysis & Telemetry** when settled to compare metrics, inspect diffs, judge blindly, or export CSV/JSON.
 
 ---
 
@@ -97,17 +93,20 @@ code --install-extension agent-arena-0.3.0.vsix --force
 | `agentArena.claudePermissionMode` | `"acceptEdits"` | Permission flag passed to Claude Code (`acceptEdits`, `bypassPermissions`, `auto`). |
 | `agentArena.codexSandboxMode` | `"workspace-write"` | Sandbox flag passed to Codex CLI (`workspace-write`, `danger-full-access`, `read-only`). |
 | `agentArena.opencodeAuto` | `true` | Pass `--auto` to OpenCode non-interactive runs. |
+| `agentArena.judge.harness` | `""` | Coding agent harness assigned to judge runs (`""` = auto-pick first available CLI). |
+| `agentArena.judge.model` | `""` | Model passed to the judge agent (`""` = CLI default). |
+| `agentArena.judge.effort` | `"medium"` | Reasoning effort passed to the judge agent when supported. |
+| `agentArena.judge.blind` | `true` | Mask submissions as `Candidate A/B/C` during AI judging. |
+| `agentArena.judge.rubric` | `""` | Optional custom evaluation rubric appended to the AI judge prompt. |
 
 ---
 
 ## Development, Testing & Publishing
 
 ```sh
-npm test                 # Run unit, parser, git-worktree, diff, webview & extension tests
+npm test                 # Run markdown, AI judge, parser, git-worktree, diff, webview & extension tests
 npm run package          # Validate & package .vsix using @vscode/vsce
 ```
-
-### Publishing to the VS Code Marketplace
 
 Pushing a tag matching `v*` triggers `.github/workflows/publish.yml` to test, package, create a GitHub Release with the `.vsix`, and publish to the VS Code Marketplace when `VSCE_PAT` is set:
 

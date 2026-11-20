@@ -10,10 +10,10 @@ const EXT_ROOT = path.resolve(__dirname, '..');
 
 const store = require(path.join(EXT_ROOT, 'lib/store'));
 const harnesses = require(path.join(EXT_ROOT, 'lib/harnesses'));
+const judge = require(path.join(EXT_ROOT, 'lib/judge'));
 const stats = require(path.join(EXT_ROOT, 'lib/stats'));
 const { renderArenaHtml } = require(path.join(EXT_ROOT, 'webview/arena'));
 const { renderAnalysisHtml } = require(path.join(EXT_ROOT, 'webview/analysis'));
-const { renderSidebarHtml } = require(path.join(EXT_ROOT, 'webview/sidebar'));
 
 const THEMES = {
   dark: `
@@ -130,6 +130,25 @@ function sanitizeStringForPublic(str, redactions) {
   return s;
 }
 
+function sanitizeJudgeConfigForPublic(jCfg, redactions) {
+  if (!jCfg) return jCfg;
+  const pubModelMap = {
+    codex: 'o3-mini',
+    claude: 'claude-sonnet',
+    opencode: 'deepseek-chat',
+    pi: 'deepseek-chat',
+    dsh: 'headless',
+  };
+  const mod = pubModelMap[jCfg.harness] || sanitizeStringForPublic(jCfg.model, redactions);
+  const eff = jCfg.effort || '';
+  const title = harnesses.HARNESS_LABELS[jCfg.harness] || jCfg.harness;
+  return {
+    ...jCfg,
+    model: mod,
+    label: eff ? `${title} · ${mod} (${eff})` : `${title} · ${mod}`,
+  };
+}
+
 function sanitizeTasksForPublic(tasks) {
   const redactions = buildRedactions();
   const publicNames = {
@@ -139,40 +158,51 @@ function sanitizeTasksForPublic(tasks) {
     pi: { model: 'deepseek-chat', effort: 'low', label: 'Pi · default (low)' },
     dsh: { model: 'headless', effort: '', label: 'DSH · headless' },
   };
-  return tasks.map((t) => ({
-    ...t,
-    prompt: sanitizeStringForPublic(t.prompt, redactions),
-    candidates: (t.candidates || []).map((c) => {
-      const m = publicNames[c.harness];
-      const cleanedFeed = (c.feedPreview || [])
-        .filter((item) => !(item.kind === 'stderr' && String(item.text || '').includes('unrecognized_model')))
-        .map((item) => ({
-          ...item,
-          text: sanitizeStringForPublic(item.text, redactions),
-        }));
-      const cleanedFinal = sanitizeStringForPublic(c.finalText, redactions);
-      const cleanedErr = c.error ? sanitizeStringForPublic(c.error, redactions) : c.error;
-      if (!m) {
+  return tasks.map((t) => {
+    const cleanedJudgment = t.judgment
+      ? {
+          ...t.judgment,
+          judgeConfig: sanitizeJudgeConfigForPublic(t.judgment.judgeConfig, redactions),
+          notes: sanitizeStringForPublic(t.judgment.notes, redactions),
+        }
+      : t.judgment;
+
+    return {
+      ...t,
+      prompt: sanitizeStringForPublic(t.prompt, redactions),
+      judgment: cleanedJudgment,
+      candidates: (t.candidates || []).map((c) => {
+        const m = publicNames[c.harness];
+        const cleanedFeed = (c.feedPreview || [])
+          .filter((item) => !(item.kind === 'stderr' && String(item.text || '').includes('unrecognized_model')))
+          .map((item) => ({
+            ...item,
+            text: sanitizeStringForPublic(item.text, redactions),
+          }));
+        const cleanedFinal = sanitizeStringForPublic(c.finalText, redactions);
+        const cleanedErr = c.error ? sanitizeStringForPublic(c.error, redactions) : c.error;
+        if (!m) {
+          return {
+            ...c,
+            feedPreview: cleanedFeed,
+            finalText: cleanedFinal,
+            error: cleanedErr,
+          };
+        }
+        const key = m.effort ? `${c.harness} · ${m.model} (${m.effort})` : `${c.harness} · ${m.model}`;
         return {
           ...c,
+          label: m.label,
+          model: m.model,
+          effort: m.effort,
+          configKey: key,
           feedPreview: cleanedFeed,
           finalText: cleanedFinal,
           error: cleanedErr,
         };
-      }
-      const key = m.effort ? `${c.harness} · ${m.model} (${m.effort})` : `${c.harness} · ${m.model}`;
-      return {
-        ...c,
-        label: m.label,
-        model: m.model,
-        effort: m.effort,
-        configKey: key,
-        feedPreview: cleanedFeed,
-        finalText: cleanedFinal,
-        error: cleanedErr,
-      };
-    }),
-  }));
+      }),
+    };
+  });
 }
 
 function sanitizePresetsForPublic(presets) {
@@ -256,6 +286,9 @@ function main() {
   const rawPresets = harnesses.getEffectivePresets([], detected);
   const presets = opts.sanitizeLabels ? sanitizePresetsForPublic(rawPresets) : rawPresets;
   const tutPresets = opts.sanitizeLabels ? sanitizePresetsForPublic(harnesses.pickTutorialConfigs(detected)) : harnesses.pickTutorialConfigs(detected);
+  const rawJudgeCfg = judge.resolveJudgeConfig({}, {}, detected);
+  const judgeConfig = opts.sanitizeLabels ? sanitizeJudgeConfigForPublic(rawJudgeCfg, buildRedactions()) : rawJudgeCfg;
+
   const fakeWebview = { cspSource: 'https:' };
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'arena-render-'));
 
@@ -278,71 +311,82 @@ function main() {
       injectHydration(renderArenaHtml(fakeWebview), arenaPayload, opts.theme),
       path.join(opts.outDir, 'arena-side-by-side.png'),
       path.join(tmpDir, 'arena.html'),
-      '1440,1080',
+      '1440,1040',
     );
     capturePng(
       chromeBin,
       injectHydration(
         renderAnalysisHtml(fakeWebview),
-        { tasks, selectedTaskId: activeTask.id, leaderboard, tab: 'run' },
+        { tasks, selectedTaskId: activeTask.id, leaderboard, harnesses: detected, judgeConfig, tab: 'run' },
         opts.theme,
       ),
       path.join(opts.outDir, 'analysis-telemetry.png'),
       path.join(tmpDir, 'analysis.html'),
-      '1440,1320',
+      '1440,1260',
     );
     capturePng(
       chromeBin,
       injectHydration(
         renderAnalysisHtml(fakeWebview),
-        { tasks, selectedTaskId: activeTask.id, leaderboard, tab: 'board' },
+        { tasks, selectedTaskId: activeTask.id, leaderboard, harnesses: detected, judgeConfig, tab: 'board' },
         opts.theme,
       ),
       path.join(opts.outDir, 'analysis-leaderboard.png'),
       path.join(tmpDir, 'board.html'),
-      '1440,1260',
+      '1440,860',
     );
 
     if (opts.qaDir) {
       capturePng(
         chromeBin,
-        injectHydration(renderArenaHtml(fakeWebview), arenaPayload, 'light'),
-        path.join(opts.qaDir, 'qa_arena_light.png'),
-        path.join(tmpDir, 'qa_arena_light.html'),
-        '1440,1080',
+        injectHydration(
+          renderAnalysisHtml(fakeWebview),
+          { tasks, selectedTaskId: activeTask.id, leaderboard, harnesses: detected, judgeConfig, expandDetails: true, tab: 'run' },
+          'dark',
+        ),
+        path.join(opts.qaDir, 'qa_v04_analysis_expanded.png'),
+        path.join(tmpDir, 'qa_v04_analysis_expanded.html'),
+        '1440,1480',
       );
       capturePng(
         chromeBin,
         injectHydration(
           renderAnalysisHtml(fakeWebview),
-          { tasks, selectedTaskId: activeTask.id, leaderboard, tab: 'run' },
-          'light',
+          { tasks, selectedTaskId: activeTask.id, leaderboard, harnesses: detected, judgeConfig, expandDetails: true, tab: 'board' },
+          'dark',
         ),
-        path.join(opts.qaDir, 'qa_analysis_light.png'),
-        path.join(tmpDir, 'qa_analysis_light.html'),
+        path.join(opts.qaDir, 'qa_v04_leaderboard_expanded.png'),
+        path.join(tmpDir, 'qa_v04_leaderboard_expanded.html'),
         '1440,1320',
       );
       capturePng(
         chromeBin,
+        injectHydration(renderArenaHtml(fakeWebview), arenaPayload, 'light'),
+        path.join(opts.qaDir, 'qa_v04_arena_light.png'),
+        path.join(tmpDir, 'qa_v04_arena_light.html'),
+        '1440,1040',
+      );
+      capturePng(
+        chromeBin,
         injectHydration(
           renderAnalysisHtml(fakeWebview),
-          { tasks, selectedTaskId: activeTask.id, leaderboard, tab: 'run', blindMode: true },
-          'dark',
+          { tasks, selectedTaskId: activeTask.id, leaderboard, harnesses: detected, judgeConfig, tab: 'run' },
+          'light',
         ),
-        path.join(opts.qaDir, 'qa_analysis_blind.png'),
-        path.join(tmpDir, 'qa_analysis_blind.html'),
+        path.join(opts.qaDir, 'qa_v04_analysis_light.png'),
+        path.join(tmpDir, 'qa_v04_analysis_light.html'),
         '1440,1260',
       );
       capturePng(
         chromeBin,
         injectHydration(
-          renderSidebarHtml(fakeWebview),
-          { harnesses: detected, tasks },
+          renderAnalysisHtml(fakeWebview),
+          { tasks, selectedTaskId: activeTask.id, leaderboard, harnesses: detected, judgeConfig, tab: 'run', blindMode: true },
           'dark',
         ),
-        path.join(opts.qaDir, 'qa_sidebar_dark.png'),
-        path.join(tmpDir, 'qa_sidebar_dark.html'),
-        '520,820',
+        path.join(opts.qaDir, 'qa_v04_analysis_blind.png'),
+        path.join(tmpDir, 'qa_v04_analysis_blind.html'),
+        '1440,1220',
       );
     }
   } finally {

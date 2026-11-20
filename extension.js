@@ -9,6 +9,7 @@ const vscode = require('vscode');
 const store = require('./lib/store');
 const harnesses = require('./lib/harnesses');
 const isolator = require('./lib/isolator');
+const judge = require('./lib/judge');
 const stats = require('./lib/stats');
 const { renderSidebarHtml } = require('./webview/sidebar');
 const { renderArenaHtml } = require('./webview/arena');
@@ -33,6 +34,15 @@ function getConfig() {
     claudePermissionMode: cfg.get('claudePermissionMode') || 'acceptEdits',
     codexSandboxMode: cfg.get('codexSandboxMode') || 'workspace-write',
     opencodeAuto: cfg.get('opencodeAuto') !== false,
+    judge: {
+      harness: cfg.get('judge.harness') || '',
+      model: cfg.get('judge.model') || '',
+      effort: cfg.get('judge.effort') !== undefined ? cfg.get('judge.effort') : 'medium',
+      blind: cfg.get('judge.blind') !== false,
+      rubric: cfg.get('judge.rubric') || '',
+      extraArgs: cfg.get('judge.extraArgs') || [],
+      commandTemplate: cfg.get('judge.commandTemplate') || '',
+    },
   };
 }
 
@@ -44,6 +54,7 @@ function activate(context) {
   let activeAnalysisTaskId = null;
   let analysisFilter = { tag: '', harness: '' };
   let activeRunners = new Map(); // `${taskId}::${candId}` -> { cancel, taskId, candId }
+  let activeJudges = new Map();  // taskId -> { cancel, label }
   let deletedTasks = new Set();
   let recentLaunchHashes = new Map();
   let launchInFlight = false;
@@ -160,18 +171,49 @@ function activate(context) {
   function pushAnalysisState(taskId = activeAnalysisTaskId, tab = null) {
     if (!analysisPanel) return;
     const root = getWorkspaceRoot();
+    const cfg = getConfig();
+    const detected = harnesses.detectHarnesses();
     const tasks = store.listTasks(root);
     if (taskId) activeAnalysisTaskId = taskId;
     if (!activeAnalysisTaskId && tasks.length) activeAnalysisTaskId = tasks[0].id;
+    const activeJudgeEntry = Array.from(activeJudges.entries())[0];
     analysisPanel.webview.postMessage({
       type: 'state',
       payload: {
         tasks,
         selectedTaskId: activeAnalysisTaskId,
         leaderboard: stats.computeLeaderboard(tasks, analysisFilter),
+        harnesses: detected,
+        judgeConfig: judge.resolveJudgeConfig({}, cfg.judge, detected),
+        judgingTaskId: activeJudgeEntry ? activeJudgeEntry[0] : null,
+        judgingLabel: activeJudgeEntry ? activeJudgeEntry[1].label : '',
         tab: tab || undefined,
       },
     });
+  }
+
+  function readCandidateFileText(taskId, candId, relPath) {
+    try {
+      const root = getWorkspaceRoot();
+      const task = store.loadTask(root, taskId);
+      if (!task) return { error: 'Task not found' };
+      const cand = (task.candidates || []).find((c) => c.id === candId);
+      if (!cand) return { error: 'Candidate not found' };
+      const absPath = isolator.assertInsideDir(cand.workDir, relPath);
+      if (!fs.existsSync(absPath)) return { error: `File not found: ${relPath}` };
+      const st = fs.statSync(absPath);
+      if (!st.isFile()) return { error: 'Not a regular file' };
+      if (st.size > 512 * 1024) {
+        return { text: '', error: `File exceeds 512 KB preview limit (${relPath})` };
+      }
+      const buf = fs.readFileSync(absPath);
+      if (buf.subarray(0, 4096).includes(0)) {
+        return { text: '', error: `Binary file preview unavailable (${relPath})` };
+      }
+      return { text: buf.toString('utf8'), error: null };
+    } catch (err) {
+      return { text: '', error: err.message };
+    }
   }
 
   function refreshAllViews() {
@@ -535,6 +577,12 @@ function activate(context) {
           if (txt.length > 150000) txt = `${txt.slice(0, 150000)}\n… [truncated]`;
         }
         arenaPanel.webview.postMessage({ type: 'rawLogLoaded', payload: { candId: msg.candId, text: txt } });
+      } else if (msg.type === 'loadFileContent') {
+        const res = readCandidateFileText(msg.taskId, msg.candId, msg.relPath);
+        arenaPanel.webview.postMessage({
+          type: 'fileContentLoaded',
+          payload: { taskId: msg.taskId, candId: msg.candId, relPath: msg.relPath, text: res.text || '', error: res.error },
+        });
       }
     });
   }
@@ -585,6 +633,83 @@ function activate(context) {
         });
       } else if (msg.type === 'diffFile') {
         await openDiffInIde(msg.taskId, msg.candId, msg.relPath);
+      } else if (msg.type === 'openFile') {
+        await openFileInIde(msg.taskId, msg.candId, msg.relPath);
+      } else if (msg.type === 'loadFileContent') {
+        const res = readCandidateFileText(msg.taskId, msg.candId, msg.relPath);
+        analysisPanel.webview.postMessage({
+          type: 'fileContentLoaded',
+          payload: { taskId: msg.taskId, candId: msg.candId, relPath: msg.relPath, text: res.text || '', error: res.error },
+        });
+      } else if (msg.type === 'saveJudgeConfig') {
+        const cfg = vscode.workspace.getConfiguration('agentArena');
+        const target = vscode.ConfigurationTarget ? vscode.ConfigurationTarget.Global : true;
+        const jCfg = msg.payload || {};
+        if (typeof cfg.update === 'function') {
+          if (jCfg.harness !== undefined) await cfg.update('judge.harness', jCfg.harness, target);
+          if (jCfg.model !== undefined) await cfg.update('judge.model', jCfg.model, target);
+          if (jCfg.effort !== undefined) await cfg.update('judge.effort', jCfg.effort, target);
+          if (jCfg.blind !== undefined) await cfg.update('judge.blind', Boolean(jCfg.blind), target);
+          if (jCfg.rubric !== undefined) await cfg.update('judge.rubric', jCfg.rubric, target);
+        }
+        vscode.window.showInformationMessage('Saved default AI judge settings.');
+        pushAnalysisState(activeAnalysisTaskId);
+      } else if (msg.type === 'cancelAgentJudge') {
+        const active = activeJudges.get(msg.taskId);
+        if (active) {
+          active.cancel();
+          activeJudges.delete(msg.taskId);
+        }
+        pushAnalysisState(activeAnalysisTaskId);
+      } else if (msg.type === 'runAgentJudge') {
+        const root = getWorkspaceRoot();
+        const task = store.loadTask(root, msg.taskId);
+        if (!task) return;
+        if (activeJudges.has(task.id)) return;
+        const cfg = getConfig();
+        const detected = harnesses.detectHarnesses();
+        const handle = judge.runAgentJudge(root, task, msg.judgeConfig || {}, {
+          savedJudgeCfg: cfg.judge,
+          detectedHarnesses: detected,
+          claudePermissionMode: cfg.claudePermissionMode,
+          opencodeAuto: cfg.opencodeAuto,
+          timeoutMinutes: Math.min(cfg.timeoutMinutes || 30, 10),
+        });
+        activeJudges.set(task.id, { cancel: handle.cancel, label: handle.judgeConfig.label });
+        if (analysisPanel) {
+          analysisPanel.webview.postMessage({
+            type: 'judgeStatus',
+            payload: { taskId: task.id, running: true, label: handle.judgeConfig.label },
+          });
+        }
+        try {
+          const jRes = await handle.promise;
+          activeJudges.delete(task.id);
+          if (!deletedTasks.has(task.id)) {
+            store.saveJudgment(root, task.id, jRes.judgmentInput);
+            if (context.globalState && context.globalState.get('agentArena.tutorialTaskId') === task.id) {
+              await context.globalState.update('agentArena.tutorialDismissed', true);
+            }
+            vscode.window.showInformationMessage(`AI Judge (${handle.judgeConfig.label}) saved verdict.`);
+            refreshAllViews();
+          }
+          if (analysisPanel) {
+            analysisPanel.webview.postMessage({
+              type: 'judgeStatus',
+              payload: { taskId: task.id, running: false },
+            });
+          }
+        } catch (err) {
+          activeJudges.delete(task.id);
+          vscode.window.showWarningMessage(`AI Judge failed: ${err.message}`);
+          if (analysisPanel) {
+            analysisPanel.webview.postMessage({
+              type: 'judgeStatus',
+              payload: { taskId: task.id, running: false, error: err.message },
+            });
+          }
+          pushAnalysisState(activeAnalysisTaskId);
+        }
       } else if (msg.type === 'saveJudgment') {
         const root = getWorkspaceRoot();
         store.saveJudgment(root, msg.taskId, msg.payload);
@@ -650,7 +775,13 @@ function activate(context) {
   };
 
   context.subscriptions.push(
-    { dispose: () => cancelTask(null) },
+    {
+      dispose: () => {
+        cancelTask(null);
+        for (const active of activeJudges.values()) active.cancel();
+        activeJudges.clear();
+      },
+    },
     vscode.window.registerWebviewViewProvider('agentArena.sidebar', sidebarProvider),
     vscode.commands.registerCommand('agentArena.openArena', () => openArenaPanel()),
     vscode.commands.registerCommand('agentArena.openAnalysis', () => openAnalysisPanel()),
